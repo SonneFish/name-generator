@@ -1,3 +1,4 @@
+import '@ant-design/v5-patch-for-react-19';
 import { useEffect, useState } from "react";
 import { proxy, snapshot, useSnapshot } from "valtio";
 import * as CommonType from "@/script/common/type";
