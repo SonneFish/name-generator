@@ -11,6 +11,15 @@ import NameDb_五道口_集思录 from "@/database/name_db/五道口_集思录_c
 import NameDb_五道口_精选集 from "@/database/name_db/五道口_精选集_国家科研基金项目负责人名.json";
 import NameDb_登科录 from "@/database/name_db/登科录_历史进士名.json";
 
+// 创建字符到拼音的映射表，优化查找性能
+const charToPinyinMap: Record<string, CommonType.Char_With_Pinyin[]> = {};
+for (const item of AllPinyinList as CommonType.Char_With_Pinyin[]) {
+  if (!charToPinyinMap[item.char]) {
+    charToPinyinMap[item.char] = [];
+  }
+  charToPinyinMap[item.char].push(item);
+}
+
 export async function asyncSleep(ms: number) {
   return new Promise((reslove) => {
     setTimeout(() => {
@@ -77,18 +86,13 @@ export function getCharCountInPinyinDb(
 }
 
 /**
- * 获取该字对应的拼音, 假设至少有一个拼音
+ * 获取该字对应的拼音, 假设至少有一个拼音 - 优化版本
  * @param char
  * @returns
  */
 export function getPinyinOfChar(char: string) {
-  let pinyinList: CommonType.Char_With_Pinyin[] = [];
-
-  for (const item of AllPinyinList as CommonType.Char_With_Pinyin[]) {
-    if (item.char === char) {
-      pinyinList.push(item);
-    }
-  }
+  // 使用预构建的映射表，避免每次调用时遍历整个数组
+  const pinyinList = charToPinyinMap[char] || [];
   return pinyinList as [
     CommonType.Char_With_Pinyin,
     ...CommonType.Char_With_Pinyin[]
@@ -147,6 +151,7 @@ export function generateLegalNameList({
   generateType,
   charSpecifyPos,
   generateAll = false,
+  enableFilterSamePinyinMustHaveChars = true,
 }: {
   /**
    * 姓的全称, 用于合成最终结果
@@ -181,6 +186,10 @@ export function generateLegalNameList({
    * 是否生成全部数据, 默认只生成有限个数, 以节约计算时间
    */
   generateAll?: boolean;
+  /**
+   * 是否过滤同音必选字，默认为true
+   */
+  enableFilterSamePinyinMustHaveChars?: boolean;
 }) {
   // 显式对类型进行判断, 避免以后因漏加类型导致落入默认情况上
   switch (generateType) {
@@ -195,6 +204,7 @@ export function generateLegalNameList({
         pinyinOptionList,
         generateType,
         generateAll,
+        enableFilterSamePinyinMustHaveChars,
       });
     case Const.Choose_Type_Option["五道口-精选集"]:
     case Const.Choose_Type_Option["五道口-集思录"]:
@@ -211,6 +221,7 @@ export function generateLegalNameList({
         charSpecifyPos,
         generateType,
         generateAll,
+        enableFilterSamePinyinMustHaveChars,
       });
   }
 }
@@ -229,6 +240,7 @@ export function generateLegalNameListBy诗云({
   pinyinOptionList,
   generateType,
   generateAll = false,
+  enableFilterSamePinyinMustHaveChars = true,
 }: {
   /**
    * 姓的全称, 用于合成最终结果
@@ -265,6 +277,10 @@ export function generateLegalNameListBy诗云({
    * 是否生成全部数据, 默认只生成有限个数, 以节约计算时间
    */
   generateAll?: boolean;
+  /**
+   * 是否过滤同音必选字，默认为true
+   */
+  enableFilterSamePinyinMustHaveChars?: boolean;
 }) {
   let nameList: CommonType.Type_Name[] = [];
   // 主动复制一遍变量, 避免内部修改影响到外部值
@@ -275,14 +291,18 @@ export function generateLegalNameListBy诗云({
   for (let char_排除字 of char_排除字_list) {
     pinyinSet_同音字.add(char_排除字.pinyin);
   }
-  // 必选字不能同音
-  let buf_过滤同音必选字: Record<string, CommonType.Char_With_Pinyin> = {};
-  for (let char_必选字 of char_必选字_list) {
-    if (buf_过滤同音必选字[char_必选字["pinyin"]] === undefined) {
-      buf_过滤同音必选字[char_必选字["pinyin"]] = char_必选字;
+  
+  // 必选字不能同音（根据开关状态决定是否执行）
+  if (enableFilterSamePinyinMustHaveChars) {
+    let buf_过滤同音必选字: Record<string, CommonType.Char_With_Pinyin> = {};
+    for (let char_必选字 of char_必选字_list) {
+      if (buf_过滤同音必选字[char_必选字["pinyin"]] === undefined) {
+        buf_过滤同音必选字[char_必选字["pinyin"]] = char_必选字;
+      }
     }
+    char_必选字_list = [...Object.values(buf_过滤同音必选字)];
   }
-  char_必选字_list = [...Object.values(buf_过滤同音必选字)];
+  
   // 按必选字进行过滤
   const set_必选字 = new Set();
   for (let char_必选字 of char_必选字_list) {
@@ -367,7 +387,6 @@ export function generateLegalNameListBy诗云({
       if (char_必选字_list.length > 0) {
         // 先将必选字检查置为false
         flag_check_必选字 = false;
-
         // 检查是否包含必选字
         for (let optionChar of pinyinItemChar_1.char_list) {
           if (flag_check_必选字) {
@@ -396,23 +415,27 @@ export function generateLegalNameListBy诗云({
           }
         }
       }
-      // 必选字位置检查
+      // 必选字位置检查 - 优化版本
       if (char_必选字_list.length > 0) {
-        if (charSpecifyPos === Const.Char_Specify_Option.第二位) {
-          if (set_必选字.has(pinyinItemChar_1.char) === false) {
-            flag_check_必选字 = false;
-          }
-        }
-        if (charSpecifyPos === Const.Char_Specify_Option.第三位) {
-          if (set_必选字.has(pinyinItemChar_2.char) === false) {
-            flag_check_必选字 = false;
-          }
+        const isSecondPosition = charSpecifyPos === Const.Char_Specify_Option.第二位;
+        const isThirdPosition = charSpecifyPos === Const.Char_Specify_Option.第三位;
+        
+        const hasChar1 = set_必选字.has(pinyinItemChar_1.char);
+        const hasChar2 = set_必选字.has(pinyinItemChar_2.char);
+        
+        if ((isSecondPosition && !hasChar1) || 
+            (isThirdPosition && !hasChar2) || 
+            (!isSecondPosition && !isThirdPosition && !hasChar1 && !hasChar2)) {
+          flag_check_必选字 = false;
         }
       }
       if (flag_check_必选字 === false) {
         // 必选字检查未通过
         continue;
       }
+      // 生成姓名 - 优化版本
+      const surnameStr = char_姓_全部.map((item) => item.char).join("");
+      
       if (generateType === Const.Choose_Type_Option["诗云-按发音合并"]) {
         const name: CommonType.Type_Name = {
           姓氏: char_姓_全部,
@@ -422,9 +445,7 @@ export function generateLegalNameListBy诗云({
           人名_第二个字: {
             ...pinyinItemChar_2,
           },
-          demoStr: `${char_姓_全部.map((item) => item.char).join("")}${
-            pinyinItemChar_1.char
-          }${pinyinItemChar_2.char}`,
+          demoStr: `${surnameStr}${pinyinItemChar_1.char}${pinyinItemChar_2.char}`,
           score: getScoreOfName(pinyinItemChar_1.char, pinyinItemChar_2.char),
         };
         nameList.push(name);
@@ -442,9 +463,7 @@ export function generateLegalNameListBy诗云({
                 ...char2,
                 char_list: [char2],
               },
-              demoStr:
-                `${char_姓_全部.map((item) => item.char).join("")}` +
-                `${char1.char}${char2.char}`,
+              demoStr: `${surnameStr}${char1.char}${char2.char}`,
               score: getScoreOfName(
                 pinyinItemChar_1.char,
                 pinyinItemChar_2.char
@@ -473,6 +492,7 @@ export function generateLegalNameListBy他山石({
   charSpecifyPos,
   generateType = Const.Choose_Type_Option.他山石,
   generateAll = false,
+  enableFilterSamePinyinMustHaveChars = true,
 }: {
   /**
    * 姓的全称, 用于合成最终结果
@@ -503,6 +523,10 @@ export function generateLegalNameListBy他山石({
    * 是否生成全部数据, 默认只生成有限个数, 以节约计算时间
    */
   generateAll?: boolean;
+  /**
+   * 是否过滤同音必选字，默认为true
+   */
+  enableFilterSamePinyinMustHaveChars?: boolean;
 }) {
   let nameList: CommonType.Type_Name[] = [];
 
@@ -512,15 +536,17 @@ export function generateLegalNameListBy他山石({
   for (let char_待排除的同音字 of char_待排除的同音字_list) {
     pinyinSet_同音字.add(char_待排除的同音字.pinyin);
   }
-  // 必选字不能同音
-  let buf_过滤同音必选字: Record<string, CommonType.Char_With_Pinyin> = {};
-  for (let char_必选字 of char_必选字_list) {
-    if (buf_过滤同音必选字[char_必选字["pinyin"]] === undefined) {
-      buf_过滤同音必选字[char_必选字["pinyin"]] = char_必选字;
+  
+  // 必选字不能同音（根据开关状态决定是否执行）
+  if (enableFilterSamePinyinMustHaveChars) {
+    let buf_过滤同音必选字: Record<string, CommonType.Char_With_Pinyin> = {};
+    for (let char_必选字 of char_必选字_list) {
+      if (buf_过滤同音必选字[char_必选字["pinyin"]] === undefined) {
+        buf_过滤同音必选字[char_必选字["pinyin"]] = char_必选字;
+      }
     }
+    char_必选字_list = [...Object.values(buf_过滤同音必选字)];
   }
-
-  char_必选字_list = [...Object.values(buf_过滤同音必选字)];
 
   let legalNameList: string[];
   switch (generateType) {
@@ -549,7 +575,7 @@ export function generateLegalNameListBy他山石({
       legalNameList = NameDb_古人云;
   }
 
-  // 首先按必选字进行过滤, 减少成本
+  // 首先按必选字进行过滤, 减少成本 - 优化版本
   const set_必选字 = new Set();
   for (let char_必选字 of char_必选字_list) {
     set_必选字.add(char_必选字.char);
@@ -558,24 +584,24 @@ export function generateLegalNameListBy他山石({
     set_必选字.size > 0 && charSpecifyPos === Const.Char_Specify_Option.第二位;
 
   if (char_必选字_list.length > 0) {
+    const isSecondPosition = charSpecifyPos === Const.Char_Specify_Option.第二位;
+    const isThirdPosition = charSpecifyPos === Const.Char_Specify_Option.第三位;
+    
     legalNameList = legalNameList.filter((item) => {
       let [char_1, char_2] = item.split("");
-      if (
-        set_必选字.has(char_1) === false &&
-        set_必选字.has(char_2) === false
-      ) {
+      
+      const hasChar1 = set_必选字.has(char_1);
+      const hasChar2 = set_必选字.has(char_2);
+      
+      // 检查是否包含必选字
+      if (!hasChar1 && !hasChar2) {
         return false;
       }
+      
       // 必选字位置检查
-      if (charSpecifyPos === Const.Char_Specify_Option.第二位) {
-        if (set_必选字.has(char_1) === false) {
-          return false;
-        }
-      }
-      if (charSpecifyPos === Const.Char_Specify_Option.第三位) {
-        if (set_必选字.has(char_2) === false) {
-          return false;
-        }
+      if ((isSecondPosition && !hasChar1) || 
+          (isThirdPosition && !hasChar2)) {
+        return false;
       }
 
       return true;
@@ -593,10 +619,11 @@ export function generateLegalNameListBy他山石({
     };
   });
 
-  // 排除不合法的发音
+  // 排除不合法的发音 - 优化版本
   legalPinyinNameList = legalPinyinNameList.filter((item) => {
     // 排除同音字
     if (flag_第二位指定了候选字_执行特殊音韵检查逻辑) {
+      // 必选字在第二位时, 不应执行对必选字同音的检测
     } else {
       // 必选字在第二位时, 不应执行对必选字同音的检测
       if (pinyinSet_同音字.has(item.pinyin_char_1.pinyin)) {
@@ -607,22 +634,19 @@ export function generateLegalNameListBy他山石({
       return false;
     }
 
+    // 音韵检查
     if (flag_第二位指定了候选字_执行特殊音韵检查逻辑) {
-      if (
-        Util.isCharPairLegal({
-          charList: [item.pinyin_char_1, item.pinyin_char_2],
-          type: "last_2_char",
-        }) === false
-      ) {
+      if (!Util.isCharPairLegal({
+        charList: [item.pinyin_char_1, item.pinyin_char_2],
+        type: "last_2_char",
+      })) {
         return false;
       }
     } else {
-      if (
-        Util.isCharPairLegal({
-          charList: [char_姓_末尾字, item.pinyin_char_1, item.pinyin_char_2],
-          type: "full_name",
-        }) === false
-      ) {
+      if (!Util.isCharPairLegal({
+        charList: [char_姓_末尾字, item.pinyin_char_1, item.pinyin_char_2],
+        type: "full_name",
+      })) {
         return false;
       }
     }
@@ -630,7 +654,9 @@ export function generateLegalNameListBy他山石({
     return true;
   });
 
-  // 生成所有可能的结果
+  // 生成所有可能的结果 - 优化版本
+  const surnameStr = char_姓_全部.map((item) => item.char).join("");
+  
   for (let legalPinyinName of legalPinyinNameList) {
     let pinyin_1 = legalPinyinName.pinyin_char_1;
     let pinyin_2 = legalPinyinName.pinyin_char_2;
@@ -645,9 +671,7 @@ export function generateLegalNameListBy他山石({
         ...pinyin_2,
         char_list: [pinyin_2],
       },
-      demoStr: `${char_姓_全部.map((item) => item.char).join("")}${
-        pinyin_1.char
-      }${pinyin_2.char}`,
+      demoStr: `${surnameStr}${pinyin_1.char}${pinyin_2.char}`,
       score: getScoreOfName(pinyin_1.char, pinyin_2.char),
     };
     nameList.push(name);

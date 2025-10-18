@@ -3,6 +3,7 @@ import { proxy, snapshot, useSnapshot } from "valtio";
 import * as CommonType from "@/script/common/type";
 import "./index.less";
 import { DownloadOutlined, QuestionCircleOutlined } from "@ant-design/icons";
+import * as Util from "@/script/common/util";
 import {
   List,
   Row,
@@ -20,6 +21,8 @@ import {
   Typography,
   Tabs,
   Tooltip,
+  Tag,
+  Modal,
 } from "antd";
 import Desc from "./desc";
 import Tip from "./component/tip";
@@ -45,7 +48,7 @@ let default_姓氏末字_拼音_choose =
   );
 let default_input_排除字列表 = utils.getValueByStorage<string>(
   Const.Storage_Key_Map.需过滤字列表,
-  "李诞\n呼兰\n思文\n黄西"
+  "玄德\n云长\n翼德\n备\n羽\n飞"
 );
 let default_input_必选字位置 = utils.getValueByStorage<Type.CharSpecifyPos>(
   Const.Storage_Key_Map.必选字位置,
@@ -53,7 +56,7 @@ let default_input_必选字位置 = utils.getValueByStorage<Type.CharSpecifyPos>
 );
 let default_input_必选字 = utils.getValueByStorage<string>(
   Const.Storage_Key_Map.必选字,
-  "王建国\n呼兰\n庞博\n程璐\n周奇墨"
+  "亮\n云\n忠"
 );
 let default_gender_type = utils.getValueByStorage<Type.GenderType>(
   Const.Storage_Key_Map.Gender_Type,
@@ -62,6 +65,16 @@ let default_gender_type = utils.getValueByStorage<Type.GenderType>(
 let default_是否乱序展示候选名 = utils.getValueByStorage<boolean>(
   Const.Storage_Key_Map.是否乱序展示候选名,
   true
+);
+
+let default_必选字不能同音 = utils.getValueByStorage<boolean>(
+  Const.Storage_Key_Map.必选字不能同音,
+  true
+);
+
+let default_当前候选字库 = utils.getValueByStorage<Type.ChooseType>(
+  Const.Storage_Key_Map.当前候选字库,
+  Const.Choose_Type_Option.古人云
 );
 
 const store = proxy<{
@@ -75,6 +88,7 @@ const store = proxy<{
     currentCharDbLevel: Type.CharDbLevel;
     genderType: Type.GenderType;
     enableRandomNameList: boolean;
+    enableFilterSamePinyinMustHaveChars: boolean;
     generateConfig: {
       charSpecifyPos: Type.CharSpecifyPos;
       姓氏末字_拼音_choose: CommonType.Char_With_Pinyin;
@@ -92,17 +106,18 @@ const store = proxy<{
   /**
    * 最大展示的姓名数
    */
-  maxDisplayItem: 1000,
+  maxDisplayItem: 2000,
   /**
    * 每行展示x列
    */
   columnCount: 10,
   status: {
     isLoading: false,
-    currentTab: Const.Choose_Type_Option.古人云,
+    currentTab: default_当前候选字库 as Type.ChooseType,
     currentCharDbLevel: default_char_level,
     genderType: default_gender_type,
     enableRandomNameList: default_是否乱序展示候选名,
+    enableFilterSamePinyinMustHaveChars: default_必选字不能同音,
     generateConfig: {
       charSpecifyPos: default_input_必选字位置,
       姓氏末字_拼音_choose: default_姓氏末字_拼音_choose,
@@ -118,6 +133,27 @@ export default () => {
   let [input_必选字, set_input_必选字] = useState<string>(default_input_必选字);
   let [totalNameList, setTotalNameList] = useState<CommonType.Type_Name[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [blacklist, setBlacklist] = useState<string[]>(() => {
+    const savedBlacklist = localStorage.getItem('nameBlacklist');
+    return savedBlacklist ? JSON.parse(savedBlacklist) : [];
+  });
+  const [likelist, setLikelist] = useState<string[]>(() => {
+    const savedLikelist = localStorage.getItem('nameLikelist');
+    return savedLikelist ? JSON.parse(savedLikelist) : [];
+  });
+  const [charBlacklist, setCharBlacklist] = useState<string[]>(() => {
+    const savedCharBlacklist = localStorage.getItem('charBlacklist');
+    return savedCharBlacklist ? JSON.parse(savedCharBlacklist) : [];
+  });
+  const [charLikelist, setCharLikelist] = useState<string[]>(() => {
+    const savedCharLikelist = localStorage.getItem('charLikelist');
+    return savedCharLikelist ? JSON.parse(savedCharLikelist) : [];
+  });
+  const [viewedList, setViewedList] = useState<string[]>(() => {
+    const savedViewedList = localStorage.getItem('nameViewedList');
+    return savedViewedList ? JSON.parse(savedViewedList) : [];
+  });
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   let str_姓氏 = utils.removeUnChineseChar(input_姓氏);
   let str_必选字 = utils.removeUnChineseChar(input_必选字);
   let str_排除字列表 = utils.removeUnChineseChar(input_排除字列表);
@@ -145,37 +181,39 @@ export default () => {
   let ele_选择末尾字发音 = <div></div>;
   if (flag姓氏最后一字是否为多音字) {
     ele_选择末尾字发音 = (
-      <Row align="middle">
-        <Col span={const_col_标题_span}></Col>
-        <Col span={const_col_输入框_span - const_col_标题_span}>
-          {char_姓_末尾字}为多音字, 请选择其读音&nbsp;&nbsp;
-          <Radio.Group
-            defaultValue={
-              snapshot.status.generateConfig.姓氏末字_拼音_choose.pinyin
-            }
-            onChange={(event) => {
-              let choosePinyin原始值 = event.target.value;
-              let choose拼音配置 = char_姓_末尾字_PinyinList.filter((item) => {
-                return item.pinyin === choosePinyin原始值;
-              })[0];
-              store.status.generateConfig.姓氏末字_拼音_choose = choose拼音配置;
-              utils.setValueByStorage(
-                Const.Storage_Key_Map.姓氏末字_拼音_choose,
-                choose拼音配置
-              );
-              Tools.reset();
-            }}
-          >
-            {char_姓_末尾字_PinyinList.map((item) => {
-              return (
-                <Radio.Button key={item.pinyin} value={item.pinyin}>
-                  {item.pinyin}
-                </Radio.Button>
-              );
-            })}
-          </Radio.Group>
-        </Col>
-      </Row>
+      <div style={{ marginTop: '8px', minHeight: '0px' }}>
+        <Row align="middle">
+          <Col span={const_col_标题_span}></Col>
+          <Col span={const_col_输入框_span - const_col_标题_span}>
+            {char_姓_末尾字}为多音字, 请选择其读音&nbsp;&nbsp;
+            <Radio.Group
+              defaultValue={
+                snapshot.status.generateConfig.姓氏末字_拼音_choose.pinyin
+              }
+              onChange={(event) => {
+                let choosePinyin原始值 = event.target.value;
+                let choose拼音配置 = char_姓_末尾字_PinyinList.filter((item) => {
+                  return item.pinyin === choosePinyin原始值;
+                })[0];
+                store.status.generateConfig.姓氏末字_拼音_choose = choose拼音配置;
+                utils.setValueByStorage(
+                  Const.Storage_Key_Map.姓氏末字_拼音_choose,
+                  choose拼音配置
+                );
+                Tools.reset();
+              }}
+            >
+              {char_姓_末尾字_PinyinList.map((item) => {
+                return (
+                  <Radio.Button key={item.pinyin} value={item.pinyin}>
+                    {item.pinyin}
+                  </Radio.Button>
+                );
+              })}
+            </Radio.Group>
+          </Col>
+        </Row>
+      </div>
     );
   }
 
@@ -198,8 +236,241 @@ export default () => {
     // setIsOpen(true);
   };
 
+  // 更新黑名单状态
+  const updateBlacklist = (newBlacklist: string[]) => {
+    setBlacklist(newBlacklist);
+    localStorage.setItem('nameBlacklist', JSON.stringify(newBlacklist));
+  };
+
+  // 更新喜欢名单状态
+  const updateLikelist = (newLikelist: string[]) => {
+    setLikelist(newLikelist);
+    localStorage.setItem('nameLikelist', JSON.stringify(newLikelist));
+  };
+
+  // 更新单字黑名单状态
+  const updateCharBlacklist = (newCharBlacklist: string[]) => {
+    setCharBlacklist(newCharBlacklist);
+    localStorage.setItem('charBlacklist', JSON.stringify(newCharBlacklist));
+  };
+
+  // 更新单字喜欢名单状态
+  const updateCharLikelist = (newCharLikelist: string[]) => {
+    setCharLikelist(newCharLikelist);
+    localStorage.setItem('charLikelist', JSON.stringify(newCharLikelist));
+  };
+
+  const updateViewedList = (newViewedList: string[]) => {
+    setViewedList(newViewedList);
+    localStorage.setItem('nameViewedList', JSON.stringify(newViewedList));
+  };
+
+  // 添加当前页所有姓名到已阅览名单
+  const addCurrentPageToViewedList = (currentPageNames: string[]) => {
+    const newViewedList = [...new Set([...viewedList, ...currentPageNames])]; // 去重
+    updateViewedList(newViewedList);
+    message.success(`已将当前页的 ${currentPageNames.length} 个姓名加入已阅览名单`);
+  };
+
+  // 取消添加当前页所有姓名到已阅览名单
+  const removeCurrentPageFromViewedList = (currentPageNames: string[]) => {
+    const newViewedList = viewedList.filter(name => !currentPageNames.includes(name));
+    updateViewedList(newViewedList);
+    message.success(`已将当前页的 ${currentPageNames.length} 个姓名从已阅览名单中移除`);
+  };
+
+  // 导出配置功能
+  const exportConfig = () => {
+    // 收集所有配置项
+    const config = {
+      // 基本配置
+      surname: input_姓氏,
+      excludeChars: input_排除字列表,
+      mustHaveChars: input_必选字,
+      mustHaveCharsPosition: snapshot.status.generateConfig.charSpecifyPos,
+      charDbLevel: snapshot.status.currentCharDbLevel,
+      genderType: snapshot.status.genderType,
+      enableRandomNameList: snapshot.status.enableRandomNameList,
+      currentTab: snapshot.status.currentTab,
+      
+      // 黑名单、喜欢名单和已阅览名单（导出时忽略姓氏）
+      blacklist: blacklist,
+      likelist: likelist,
+      charBlacklist: charBlacklist,
+      charLikelist: charLikelist,
+      viewedList: viewedList,
+      
+      // 姓氏末字拼音选择（如果有多音字）
+      surnameLastCharPinyin: snapshot.status.generateConfig.姓氏末字_拼音_choose,
+    };
+    
+    // 转换为JSON字符串
+    const configJson = JSON.stringify(config, null, 2);
+    
+    // 创建Blob对象
+    const blob = new Blob([configJson], { type: 'application/json' });
+    
+    // 下载文件
+    saveAs(blob, '姓名生成器配置.json');
+    
+    message.success('配置导出成功');
+  };
+
+  // 导入配置功能
+  const importConfig = () => {
+    // 创建文件输入元素
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.json';
+    
+    // 监听文件选择事件
+    fileInput.onchange = (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          // 解析JSON
+          const config = JSON.parse(e.target?.result as string);
+          
+          // 应用配置
+          // Ignore surname when importing configuration
+        // if (config.surname !== undefined) {
+        //   set_input_姓氏(config.surname);
+        //   utils.setValueByStorage(Const.Storage_Key_Map.姓氏, config.surname);
+        // }
+          
+          if (config.excludeChars !== undefined) {
+            set_input_排除字列表(config.excludeChars);
+            utils.setValueByStorage(Const.Storage_Key_Map.需过滤字列表, config.excludeChars);
+          }
+          
+          if (config.mustHaveChars !== undefined) {
+            set_input_必选字(config.mustHaveChars);
+            utils.setValueByStorage(Const.Storage_Key_Map.必选字, config.mustHaveChars);
+          }
+          
+          if (config.mustHaveCharsPosition !== undefined) {
+            store.status.generateConfig.charSpecifyPos = config.mustHaveCharsPosition;
+            utils.setValueByStorage(Const.Storage_Key_Map.必选字位置, config.mustHaveCharsPosition);
+          }
+          
+          if (config.charDbLevel !== undefined) {
+            store.status.currentCharDbLevel = config.charDbLevel;
+            utils.setValueByStorage(Const.Storage_Key_Map.Char_Level, config.charDbLevel);
+          }
+          
+          if (config.genderType !== undefined) {
+            store.status.genderType = config.genderType;
+            utils.setValueByStorage(Const.Storage_Key_Map.Gender_Type, config.genderType);
+          }
+          
+          if (config.enableRandomNameList !== undefined) {
+            store.status.enableRandomNameList = config.enableRandomNameList;
+            utils.setValueByStorage(Const.Storage_Key_Map.是否乱序展示候选名, config.enableRandomNameList);
+          }
+          
+          if (config.currentTab !== undefined) {
+            store.status.currentTab = config.currentTab;
+          }
+          
+          if (config.blacklist !== undefined) {
+            updateBlacklist(config.blacklist);
+          }
+          
+          if (config.likelist !== undefined) {
+            updateLikelist(config.likelist);
+          }
+          
+          if (config.charBlacklist !== undefined) {
+            updateCharBlacklist(config.charBlacklist);
+          }
+          
+          if (config.charLikelist !== undefined) {
+            updateCharLikelist(config.charLikelist);
+          }
+          
+          if (config.viewedList !== undefined) {
+            updateViewedList(config.viewedList);
+          }
+          
+          if (config.surnameLastCharPinyin !== undefined) {
+            store.status.generateConfig.姓氏末字_拼音_choose = config.surnameLastCharPinyin;
+            utils.setValueByStorage(Const.Storage_Key_Map.姓氏末字_拼音_choose, config.surnameLastCharPinyin);
+          }
+          
+          message.success('配置导入成功');
+        } catch (error) {
+          message.error('配置导入失败，请检查文件格式');
+          console.error('配置导入失败:', error);
+        }
+      };
+      
+      // 读取文件
+      reader.readAsText(file);
+    };
+    
+    // 触发文件选择
+    fileInput.click();
+  };
+
   const onClose = () => {
     setIsOpen(false);
+  };
+
+  // 重置所有配置
+  const resetAllConfig = () => {
+    // 清除所有localStorage中的配置
+    localStorage.removeItem('nameBlacklist');
+    localStorage.removeItem('nameLikelist');
+    localStorage.removeItem('charBlacklist');
+    localStorage.removeItem('charLikelist');
+    localStorage.removeItem('nameViewedList');
+    localStorage.removeItem(Const.Storage_Key_Map.姓氏);
+    localStorage.removeItem(Const.Storage_Key_Map.需过滤字列表);
+    localStorage.removeItem(Const.Storage_Key_Map.必选字);
+    localStorage.removeItem(Const.Storage_Key_Map.必选字位置);
+    localStorage.removeItem(Const.Storage_Key_Map.姓氏末字_拼音_choose);
+    localStorage.removeItem(Const.Storage_Key_Map.Gender_Type);
+    localStorage.removeItem(Const.Storage_Key_Map.是否乱序展示候选名);
+    localStorage.removeItem(Const.Storage_Key_Map.当前候选字库);
+    localStorage.removeItem(Const.Storage_Key_Map.Char_Level);
+    
+    // 重置状态
+    setBlacklist([]);
+    setLikelist([]);
+    setCharBlacklist([]);
+    setCharLikelist([]);
+    setViewedList([]);
+    set_input_姓氏("张");
+    set_input_排除字列表("玄德\n云长\n翼德\n备\n羽\n飞");
+    set_input_必选字("亮\n云\n忠");
+    
+    // 重置store状态
+    store.status.currentTab = Const.Choose_Type_Option.古人云;
+    store.status.currentCharDbLevel = Const.CharDb_Level_Option["标准字库"];
+    store.status.genderType = Const.Gender_Type.都看看;
+    store.status.enableRandomNameList = true;
+    store.status.generateConfig.charSpecifyPos = Const.Char_Specify_Option.不限制;
+    store.status.generateConfig.姓氏末字_拼音_choose = {} as CommonType.Char_With_Pinyin;
+    
+    // 关闭弹窗并刷新页面
+    setIsResetModalOpen(false);
+    message.success('所有配置已重置，即将刷新页面');
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
+  };
+
+  // 显示重置确认弹窗
+  const showResetModal = () => {
+    setIsResetModalOpen(true);
+  };
+
+  // 取消重置
+  const cancelReset = () => {
+    setIsResetModalOpen(false);
   };
   const Tools = {
     reset: () => {
@@ -313,20 +584,28 @@ export default () => {
         <Col span={const_col_输入框_span}>
           <Input
             value={input_姓氏}
+            style={{ width: '200px' }}
             onChange={(e) => {
               let inputValue = e.target.value;
               inputValue = inputValue.trim();
               utils.setValueByStorage(Const.Storage_Key_Map.姓氏, inputValue);
               set_input_姓氏(inputValue);
             }}
+            onBlur={(e) => {
+              let inputValue = e.target.value;
+              inputValue = inputValue.trim();
+              const oldSurname = input_姓氏;
+              
+              // 如果姓氏发生变化，刷新黑名单、喜欢名单和已阅览名单
+              if (oldSurname !== inputValue) {
+                message.info(`姓氏已从"${oldSurname}"变更为"${inputValue}"，名单已刷新`);
+                // 重新生成候选名
+                document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+              }
+            }}
           ></Input>
         </Col>
       </Row>
-      <Divider
-        style={{
-          margin: "12px 0px",
-        }}
-      ></Divider>
       {ele_选择末尾字发音}
       <Divider
         style={{
@@ -338,20 +617,72 @@ export default () => {
           <p>需要避开的同音字(如父母姓名/亲属姓名)</p>
         </Col>
         <Col span={const_col_输入框_span}>
-          <Input.TextArea
-            autoSize={{
-              minRows: 3,
-            }}
-            value={input_排除字列表}
-            onChange={(e) => {
-              let inputValue = e.target.value;
-              utils.setValueByStorage(
-                Const.Storage_Key_Map.需过滤字列表,
-                inputValue
-              );
-              set_input_排除字列表(inputValue);
-            }}
-          ></Input.TextArea>
+          <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
+            <Input
+              placeholder="输入同音字后按回车添加"
+              style={{ width: '200px' }}
+              onPressEnter={(e) => {
+                const input = e.target as HTMLInputElement;
+                const value = input.value.trim();
+                if (value) {
+                  // 过滤掉非汉字的输入
+                  if (!Util.is汉字String(value)) {
+                    message.error('请输入汉字');
+                    return;
+                  }
+                  const currentList = input_排除字列表 ? input_排除字列表.split('\n').filter(item => item.trim()) : [];
+                  if (!currentList.includes(value)) {
+                    const newList = [...currentList, value].join('\n');
+                    utils.setValueByStorage(
+                      Const.Storage_Key_Map.需过滤字列表,
+                      newList
+                    );
+                    set_input_排除字列表(newList);
+                  }
+                  input.value = '';
+                }
+              }}
+            />
+            <Button 
+              size="small" 
+              style={{ marginLeft: '8px' }}
+              onClick={() => {
+                utils.setValueByStorage(
+                  Const.Storage_Key_Map.需过滤字列表,
+                  ''
+                );
+                set_input_排除字列表('');
+                message.success('同音字列表已清空');
+              }}
+            >
+              清空
+            </Button>
+          </div>
+        </Col>
+      </Row>
+      <Row align="middle">
+        <Col span={const_col_标题_span}></Col>
+        <Col span={const_col_输入框_span}>
+          <div style={{ marginTop: '0px', minHeight: '0px' }}>
+            {input_排除字列表 ? input_排除字列表.split('\n').filter(item => item.trim()).map((word, index) => (
+              <Tag 
+                key={`${word}-${index}`} 
+                color="red" 
+                closable
+                onClose={() => {
+                  const currentList = input_排除字列表.split('\n').filter(item => item.trim());
+                  const newList = currentList.filter(item => item !== word).join('\n');
+                  utils.setValueByStorage(
+                    Const.Storage_Key_Map.需过滤字列表,
+                    newList
+                  );
+                  set_input_排除字列表(newList);
+                }}
+              >
+                {word}
+              </Tag>
+            )) : null}
+          </div>
         </Col>
       </Row>
       <Divider
@@ -392,17 +723,87 @@ export default () => {
       <Row align="middle">
         <Col span={const_col_标题_span}></Col>
         <Col span={const_col_输入框_span}>
-          <Input.TextArea
-            autoSize={{
-              minRows: 3,
-            }}
-            value={input_必选字}
-            onChange={(e) => {
-              let inputValue = e.target.value;
-              utils.setValueByStorage(Const.Storage_Key_Map.必选字, inputValue);
-              set_input_必选字(inputValue);
-            }}
-          ></Input.TextArea>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ marginRight: '8px' }}>必选字不能同音:</span>
+            <Switch
+              checked={snapshot.status.enableFilterSamePinyinMustHaveChars}
+              onChange={(checked) => {
+                store.status.enableFilterSamePinyinMustHaveChars = checked;
+                utils.setValueByStorage(
+                  Const.Storage_Key_Map.必选字不能同音,
+                  checked
+                );
+                Tools.reset();
+              }}
+            />
+            <Tip title="开启后，若必选字同音，则只保留第一个必选字；关闭后，允许多个同音必选字同时存在"></Tip>
+          </div>
+        </Col>
+      </Row>
+      <p></p>
+      <Row align="middle">
+        <Col span={const_col_标题_span}></Col>
+        <Col span={const_col_输入框_span}>
+          <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
+            <Input
+              placeholder="输入指定用字后按回车添加"
+              style={{ width: '200px' }}
+              onPressEnter={(e) => {
+                const input = e.target as HTMLInputElement;
+                const value = input.value.trim();
+                if (value) {
+                  // 过滤掉非汉字的输入
+                  if (!Util.is汉字String(value)) {
+                    message.error('请输入汉字');
+                    return;
+                  }
+                  // 将输入的字符串拆分成单个字符
+                  const chars = value.split('');
+                  const currentList = input_必选字 ? input_必选字.split('\n').filter(item => item.trim()) : [];
+                  
+                  // 添加新字符，避免重复
+                  const newList = [...currentList];
+                  chars.forEach(char => {
+                    if (char.trim() && !newList.includes(char)) {
+                      newList.push(char);
+                    }
+                  });
+                  
+                  utils.setValueByStorage(Const.Storage_Key_Map.必选字, newList.join('\n'));
+                  set_input_必选字(newList.join('\n'));
+                  input.value = '';
+                }
+              }}
+            />
+            <Button 
+              size="small" 
+              style={{ marginLeft: '8px' }}
+              onClick={() => {
+                utils.setValueByStorage(Const.Storage_Key_Map.必选字, '');
+                set_input_必选字('');
+                message.success('指定用字列表已清空');
+              }}
+            >
+              清空
+            </Button>
+          </div>
+          <div style={{ marginTop: '8px', minHeight: '0px' }}>
+            {input_必选字 ? input_必选字.split('\n').filter(item => item.trim()).map((word, index) => (
+              <Tag 
+                key={`${word}-${index}`} 
+                color="green" 
+                closable
+                onClose={() => {
+                  const currentList = input_必选字.split('\n').filter(item => item.trim());
+                  const newList = currentList.filter(item => item !== word).join('\n');
+                  utils.setValueByStorage(Const.Storage_Key_Map.必选字, newList);
+                  set_input_必选字(newList);
+                }}
+              >
+                {word}
+              </Tag>
+            )) : null}
+          </div>
         </Col>
       </Row>
       <Divider
@@ -427,6 +828,7 @@ export default () => {
               onClick={() => {
                 // @ts-ignore
                 store.status.currentTab = item.title;
+                utils.setValueByStorage(Const.Storage_Key_Map.当前候选字库, item.title);
                 Tools.reset();
               }}
             >
@@ -444,69 +846,384 @@ export default () => {
         />
       </div>
       <p></p>
+            {/* 黑名单和喜欢名单管理区域 */}
+      <div style={{ marginBottom: '20px' }}>
+        <Row gutter={16}>
+          <Col span={6}>
+            <Card 
+              title={
+                <span>
+                  黑名单
+                  <Tip title="添加到黑名单的名字不会出现在生成的候选名中"></Tip>
+                </span>
+              } 
+              size="small" 
+              extra={
+                <Button 
+                  size="small" 
+                  onClick={() => {
+                    updateBlacklist([]);
+                    message.success('黑名单已清空');
+                    // 重新生成候选名
+                    document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                  }}
+                >
+                  清空
+                </Button>
+              }
+            >
+              <div style={{ marginBottom: '8px' }}>
+                <Input
+                  placeholder="输入名字后按回车添加"
+                  size="small"
+                  onPressEnter={(e) => {
+                    const input = e.target as HTMLInputElement;
+                    const value = input.value.trim();
+                    if (value) {
+                      // 检查是否已存在
+                      if (!blacklist.includes(value)) {
+                        // 检查是否在喜欢名单中
+                        if (likelist.includes(value)) {
+                          // 从喜欢名单中移除
+                          const newLikelist = likelist.filter((item: string) => item !== value);
+                          updateLikelist(newLikelist);
+                          message.warning(`"${input_姓氏}${value}" 已从喜欢名单移除并加入黑名单`);
+                        } else {
+                          message.success(`已将 "${input_姓氏}${value}" 加入黑名单`);
+                        }
+                        
+                        const newBlacklist = [...blacklist, value];
+                        updateBlacklist(newBlacklist);
+                        
+                        // 重新生成候选名
+                        document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                      } else {
+                        message.info(`"${input_姓氏}${value}" 已在黑名单中`);
+                      }
+                      input.value = '';
+                    }
+                  }}
+                />
+              </div>
+              <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
+                {blacklist.length > 0 ? (
+                  blacklist.map((name: string, index: number) => (
+                    <Tag 
+                      key={`${name}-${index}`} 
+                      color="red" 
+                      closable
+                      onClose={() => {
+                        const newBlacklist = blacklist.filter((item: string) => item !== name);
+                        updateBlacklist(newBlacklist);
+                        message.success(`已从黑名单移除 "${input_姓氏}${name}"`);
+                        // 重新生成候选名
+                        document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                      }}
+                    >
+                      {input_姓氏}{name}
+                    </Tag>
+                  ))
+                ) : (
+                  <span style={{ color: '#999' }}>暂无黑名单</span>
+                )}
+              </div>
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card 
+              title={
+                <span>
+                  喜欢名单
+                  <Tip title="仅用于记录，不参与候选名生成"></Tip>
+                </span>
+              } 
+              size="small"
+              extra={
+                <Button 
+                  size="small" 
+                  onClick={() => {
+                    updateLikelist([]);
+                    message.success('喜欢名单已清空');
+                  }}
+                >
+                  清空
+                </Button>
+              }
+            >
+              <div style={{ marginBottom: '8px' }}>
+                <Input
+                  placeholder="输入名字后按回车添加"
+                  size="small"
+                  onPressEnter={(e) => {
+                    const input = e.target as HTMLInputElement;
+                    const value = input.value.trim();
+                    if (value) {
+                      // 检查是否已存在
+                      if (!likelist.includes(value)) {
+                        // 检查是否在黑名单中
+                        if (blacklist.includes(value)) {
+                          // 从黑名单中移除
+                          const newBlacklist = blacklist.filter((item: string) => item !== value);
+                          updateBlacklist(newBlacklist);
+                          message.warning(`"${input_姓氏}${value}" 已从黑名单移除并加入喜欢名单`);
+                          // 重新生成候选名
+                          document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                        } else {
+                          message.success(`已将 "${input_姓氏}${value}" 加入喜欢名单`);
+                        }
+                        
+                        const newLikelist = [...likelist, value];
+                        updateLikelist(newLikelist);
+                      } else {
+                        message.info(`"${input_姓氏}${value}" 已在喜欢名单中`);
+                      }
+                      input.value = '';
+                    }
+                  }}
+                />
+              </div>
+              <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
+                {likelist.length > 0 ? (
+                  likelist.map((name: string, index: number) => (
+                    <Tag 
+                      key={`${name}-${index}`} 
+                      color="green" 
+                      closable
+                      onClose={() => {
+                        const newLikelist = likelist.filter((item: string) => item !== name);
+                        updateLikelist(newLikelist);
+                        message.success(`已从喜欢名单移除 "${input_姓氏}${name}"`);
+                      }}
+                    >
+                      {input_姓氏}{name}
+                    </Tag>
+                  ))
+                ) : (
+                  <span style={{ color: '#999' }}>暂无喜欢名单</span>
+                )}
+              </div>
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card 
+              title={
+                <span>
+                  单字黑名单
+                  <Tip title="添加到单字黑名单的字不会出现在生成的候选名中"></Tip>
+                </span>
+              } 
+              size="small"
+              extra={
+                <Button 
+                  size="small" 
+                  onClick={() => {
+                    updateCharBlacklist([]);
+                    message.success('单字黑名单已清空');
+                    // 重新生成候选名
+                    document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                  }}
+                >
+                  清空
+                </Button>
+              }
+            >
+              <div style={{ marginBottom: '8px' }}>
+                <Input
+                  placeholder="输入单字后按回车添加"
+                  size="small"
+                  onPressEnter={(e) => {
+                    const input = e.target as HTMLInputElement;
+                    const value = input.value.trim();
+                    if (value) {
+                      // 检查是否为单个字符
+                      if (value.length === 1) {
+                        // 检查是否已存在
+                        if (!charBlacklist.includes(value)) {
+                          // 检查是否在单字喜欢名单中
+                          if (charLikelist.includes(value)) {
+                            // 从单字喜欢名单中移除
+                            const newCharLikelist = charLikelist.filter((item: string) => item !== value);
+                            updateCharLikelist(newCharLikelist);
+                            message.warning(`字 "${value}" 已从单字喜欢名单移除并加入单字黑名单`);
+                          } else {
+                            message.success(`已将字 "${value}" 加入单字黑名单`);
+                          }
+                          
+                          const newCharBlacklist = [...charBlacklist, value];
+                          updateCharBlacklist(newCharBlacklist);
+                          
+                          // 重新生成候选名
+                          document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                        } else {
+                          message.info(`字 "${value}" 已在单字黑名单中`);
+                        }
+                      } else {
+                        message.warning('只能输入单个汉字');
+                      }
+                      input.value = '';
+                    }
+                  }}
+                />
+              </div>
+              <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
+                {charBlacklist.length > 0 ? (
+                  charBlacklist.map((char: string, index: number) => (
+                    <Tag 
+                      key={`${char}-${index}`} 
+                      color="orange" 
+                      closable
+                      onClose={() => {
+                        const newCharBlacklist = charBlacklist.filter((item: string) => item !== char);
+                        updateCharBlacklist(newCharBlacklist);
+                        message.success(`已从单字黑名单移除 "${char}"`);
+                        // 重新生成候选名
+                        document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                      }}
+                    >
+                      {char}
+                    </Tag>
+                  ))
+                ) : (
+                  <span style={{ color: '#999' }}>暂无单字黑名单</span>
+                )}
+              </div>
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card 
+              title={
+                <span>
+                  单字喜欢名单
+                  <Tip title="仅用于记录，不参与候选名生成"></Tip>
+                </span>
+              } 
+              size="small"
+              extra={
+                <Button 
+                  size="small" 
+                  onClick={() => {
+                    updateCharLikelist([]);
+                    message.success('单字喜欢名单已清空');
+                    // 重新生成候选名
+                    document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                  }}
+                >
+                  清空
+                </Button>
+              }
+            >
+              <div style={{ marginBottom: '8px' }}>
+                <Input
+                  placeholder="输入单字后按回车添加"
+                  size="small"
+                  onPressEnter={(e) => {
+                    const input = e.target as HTMLInputElement;
+                    const value = input.value.trim();
+                    if (value) {
+                      // 检查是否为单个字符
+                      if (value.length === 1) {
+                        // 检查是否已存在
+                        if (!charLikelist.includes(value)) {
+                          // 检查是否在单字黑名单中
+                          if (charBlacklist.includes(value)) {
+                            // 从单字黑名单中移除
+                            const newCharBlacklist = charBlacklist.filter((item: string) => item !== value);
+                            updateCharBlacklist(newCharBlacklist);
+                            message.warning(`字 "${value}" 已从单字黑名单移除并加入单字喜欢名单`);
+                            // 重新生成候选名
+                            document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                          } else {
+                            message.success(`已将字 "${value}" 加入单字喜欢名单`);
+                          }
+                          
+                          const newCharLikelist = [...charLikelist, value];
+                          updateCharLikelist(newCharLikelist);
+                        } else {
+                          message.info(`字 "${value}" 已在单字喜欢名单中`);
+                        }
+                      } else {
+                        message.warning('只能输入单个汉字');
+                      }
+                      input.value = '';
+                    }
+                  }}
+                />
+              </div>
+              <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
+                {charLikelist.length > 0 ? (
+                  charLikelist.map((char: string, index: number) => (
+                    <Tag 
+                      key={`${char}-${index}`} 
+                      color="purple" 
+                      closable
+                      onClose={() => {
+                        const newCharLikelist = charLikelist.filter((item: string) => item !== char);
+                        updateCharLikelist(newCharLikelist);
+                        message.success(`已从单字喜欢名单移除 "${char}"`);
+                        // 重新生成候选名
+                        document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                      }}
+                    >
+                      {char}
+                    </Tag>
+                  ))
+                ) : (
+                  <span style={{ color: '#999' }}>暂无单字喜欢名单</span>
+                )}
+              </div>
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card 
+              title={
+                <span>
+                  已阅览名单
+                  <Tip title="已阅览名单中的名字不会出现在生成的候选名中"></Tip>
+                </span>
+              } 
+              size="small"
+              extra={
+                <Button 
+                  size="small" 
+                  onClick={() => {
+                    updateViewedList([]);
+                    message.success('已阅览名单已清空');
+                    // 重新生成候选名
+                    document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                  }}
+                >
+                  清空
+                </Button>
+              }
+            >
+              <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
+                {viewedList.length > 0 ? (
+                  viewedList.map((name: string, index: number) => (
+                    <Tag 
+                      key={`${name}-${index}`} 
+                      color="blue" 
+                      closable
+                      onClose={() => {
+                        const newViewedList = viewedList.filter((item: string) => item !== name);
+                        updateViewedList(newViewedList);
+                        message.success(`已从已阅览名单移除 "${input_姓氏}${name}"`);
+                        // 重新生成候选名
+                        document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                      }}
+                    >
+                      {input_姓氏}{name}
+                    </Tag>
+                  ))
+                ) : (
+                  <span style={{ color: '#999' }}>暂无已阅览名单</span>
+                )}
+              </div>
+            </Card>
+          </Col>
+        </Row>
+      </div>
+      
       <Row align="middle">
-        <Col span={const_col_标题_span}>
-          <Button
-            type="primary"
-            onClick={async function () {
-              if (flag已确认姓氏最后一字发音 === false) {
-                message.error(
-                  `姓氏中的 "${char_姓_末尾字}" 为多音字, 请先确认 "${char_姓_末尾字}" 的读音`
-                );
-                return;
-              }
-
-              Tools.reset();
-              store.status.isLoading = true;
-              await utils.asyncSleep(100);
-              console.log("开始生成候选人名");
-              let totalNameList: CommonType.Type_Name[] = [];
-              let rawNameList = utils.generateLegalNameList({
-                char_姓_全部,
-                char_姓_末尾字: pinyin_of_姓_末尾字,
-                char_必选字_list,
-                char_排除字_list,
-                charSpecifyPos: snapshot.status.generateConfig.charSpecifyPos,
-                generateType: snapshot.status.currentTab,
-                pinyinOptionList: pinyinOptionList,
-                generateAll: true,
-              });
-              store.status.isLoading = false;
-              console.log("候选人名生成完毕");
-
-              // 按性别要求进行过滤
-              for (let name of rawNameList) {
-                switch (snapshot.status.genderType) {
-                  case Const.Gender_Type.偏男宝:
-                    if ([2, 3, 4].includes(name.人名_第二个字.tone)) {
-                      totalNameList.push(name);
-                    }
-                    break;
-                  case Const.Gender_Type.偏女宝:
-                    if ([1, 3].includes(name.人名_第二个字.tone)) {
-                      totalNameList.push(name);
-                    }
-                    break;
-                  case Const.Gender_Type.都看看:
-                  default:
-                    totalNameList.push(name);
-                }
-              }
-
-              // 随机打乱
-              let displayNameList = totalNameList.slice(0, 1000);
-              setTotalNameList(totalNameList);
-              console.log("随机打乱完毕");
-              if (snapshot.status.enableRandomNameList) {
-                displayNameList.sort(() => Math.random() - 0.5);
-              }
-              store.previewNameList = displayNameList;
-              console.log("数据生成完毕");
-            }}
-          >
-            生成候选方案
-          </Button>
-        </Col>
         <Col span={const_col_输入框_span}>
           乱序展示候选名&nbsp;
           <Switch
@@ -603,6 +1320,34 @@ export default () => {
           下载所有姓名方案在电脑查看
         </Button>
         <Divider type="vertical"></Divider>
+        <Button 
+          type="primary" 
+          shape="round" 
+          ghost
+          onClick={exportConfig}
+        >
+          导出配置
+        </Button>
+        <Divider type="vertical"></Divider>
+        <Button 
+          type="primary" 
+          shape="round" 
+          ghost
+          onClick={importConfig}
+        >
+          导入配置
+        </Button>
+        <Divider type="vertical"></Divider>
+        <Button 
+          type="primary" 
+          shape="round" 
+          danger
+          ghost
+          onClick={showResetModal}
+        >
+          重置所有配置
+        </Button>
+        <Divider type="vertical"></Divider>
         <Button ghost type="primary" shape="round" onClick={showDrawer}>
           原理介绍
         </Button>
@@ -616,14 +1361,174 @@ export default () => {
       >
         <Desc></Desc>
       </Drawer>
+      
+      <Modal
+        title="重置所有配置"
+        open={isResetModalOpen}
+        onOk={resetAllConfig}
+        onCancel={cancelReset}
+        okText="确认重置"
+        cancelText="取消"
+        okType="danger"
+      >
+        <p>确定要重置所有配置吗？此操作将：</p>
+        <ul>
+          <li>清除所有已保存的配置信息</li>
+          <li>重置所有筛选条件和名单</li>
+          <li>恢复到初始状态</li>
+          <li>操作完成后将自动刷新页面</li>
+        </ul>
+        <p style={{ color: 'red' }}>此操作不可恢复，请谨慎操作！</p>
+      </Modal>
       <p>
         姓氏:{input_姓氏}
         {tip}
       </p>
-      <Card title="" bordered={false} loading={snapshot.status.isLoading}>
+
+      <Col span={const_col_标题_span}>
+        <Button
+          type="primary"
+          onClick={async function () {
+            if (flag已确认姓氏最后一字发音 === false) {
+              message.error(
+                `姓氏中的 "${char_姓_末尾字}" 为多音字, 请先确认 "${char_姓_末尾字}" 的读音`
+              );
+              return;
+            }
+
+            Tools.reset();
+            store.status.isLoading = true;
+            await utils.asyncSleep(100);
+            console.log("开始生成候选人名");
+            let totalNameList: CommonType.Type_Name[] = [];
+            const generateStart = Date.now();
+            let rawNameList = utils.generateLegalNameList({
+              char_姓_全部,
+              char_姓_末尾字: pinyin_of_姓_末尾字,
+              char_必选字_list,
+              char_排除字_list,
+              charSpecifyPos: snapshot.status.generateConfig.charSpecifyPos,
+              generateType: snapshot.status.currentTab,
+              pinyinOptionList: pinyinOptionList,
+              generateAll: true,
+              enableFilterSamePinyinMustHaveChars: snapshot.status.enableFilterSamePinyinMustHaveChars,
+            });
+            const generateEnd = Date.now();
+            console.log(`候选人名生成耗时: ${generateEnd - generateStart}ms`);
+            store.status.isLoading = false;
+            console.log("候选人名生成完毕");
+
+            // 按性别要求进行过滤
+            const genderFilterStart = Date.now();
+            for (let name of rawNameList) {
+              switch (snapshot.status.genderType) {
+                case Const.Gender_Type.偏男宝:
+                  if ([2, 3, 4].includes(name.人名_第二个字.tone)) {
+                    totalNameList.push(name);
+                  }
+                  break;
+                case Const.Gender_Type.偏女宝:
+                  if ([1, 3].includes(name.人名_第二个字.tone)) {
+                    totalNameList.push(name);
+                  }
+                  break;
+                case Const.Gender_Type.都看看:
+                default:
+                  totalNameList.push(name);
+              }
+            }
+            const genderFilterEnd = Date.now();
+            console.log(`按性别要求过滤耗时: ${genderFilterEnd - genderFilterStart}ms`);
+
+            // 获取黑名单和喜欢名单
+            const blacklistGetStart = Date.now();
+            const blacklist = JSON.parse(localStorage.getItem('nameBlacklist') || '[]');
+            const likelist = JSON.parse(localStorage.getItem('nameLikelist') || '[]');
+            const charBlacklist = JSON.parse(localStorage.getItem('charBlacklist') || '[]');
+            const viewedList = JSON.parse(localStorage.getItem('nameViewedList') || '[]');
+            const blacklistGetEnd = Date.now();
+            console.log(`获取黑名单和喜欢名单耗时: ${blacklistGetEnd - blacklistGetStart}ms`);
+            
+            // 过滤掉黑名单中的名字和已阅览名单中的名字 - 优化版本
+            const blacklistFilterStart = Date.now();
+            const surnameLength = char_姓_全部.map(item => item.char).join('').length;
+            
+            // 将数组和Set转换为Set以提高查找性能
+            const blacklistSet = new Set(blacklist);
+            const viewedListSet = new Set(viewedList);
+            const charBlacklistSet = new Set(charBlacklist);
+            
+            totalNameList = totalNameList.filter(name => {
+              // 提取名字部分（去掉姓氏）
+              const namePart = name.demoStr.substring(surnameLength);
+              
+              // 检查是否在黑名单中
+              if (blacklistSet.has(namePart)) {
+                return false;
+              }
+              
+              // 检查是否在已阅览名单中
+              if (viewedListSet.has(namePart)) {
+                return false;
+              }
+              
+              // 检查是否包含单字黑名单中的字符
+              for (const char of charBlacklistSet) {
+                if (typeof namePart === 'string' && typeof char === 'string' && namePart.includes(char)) {
+                  return false;
+                }
+              }
+              
+              return true;
+            });
+            const blacklistFilterEnd = Date.now();
+            console.log(`过滤黑名单和已阅览名单中的名字耗时: ${blacklistFilterEnd - blacklistFilterStart}ms`);
+
+            setTotalNameList(totalNameList);
+            // 随机打乱
+            const shuffleStart = Date.now();
+            let newTotalNameList = [...totalNameList];
+            if (snapshot.status.enableRandomNameList) {
+              newTotalNameList.sort(() => Math.random() - 0.5);
+            }
+            let displayNameList = newTotalNameList.slice(0, snapshot.maxDisplayItem);
+            const shuffleEnd = Date.now();
+            console.log(`随机打乱耗时: ${shuffleEnd - shuffleStart}ms`);
+            
+            console.log("随机打乱完毕");
+            
+            const previewUpdateStart = Date.now();
+            store.previewNameList = displayNameList;
+            const previewUpdateEnd = Date.now();
+            console.log(`更新预览列表耗时: ${previewUpdateEnd - previewUpdateStart}ms`);
+            console.log("数据生成完毕");
+
+
+            // let displayNameList = totalNameList.slice(0, snapshot.maxDisplayItem);
+            // setTotalNameList(totalNameList);
+            // console.log("随机打乱完毕");
+            // if (snapshot.status.enableRandomNameList) {
+            //   displayNameList.sort(() => Math.random() - 0.5);
+            // }
+            // store.previewNameList = displayNameList;
+            // console.log("数据生成完毕");
+          }}
+        >
+          生成候选方案
+        </Button>
+      </Col>
+      
+      <Card title="" variant="borderless" loading={snapshot.status.isLoading}>
         <NameList
           nameList={snapshot.previewNameList as CommonType.Type_Name[]}
           columnCount={snapshot.columnCount}
+          surnameLength={char_姓_全部.map(item => item.char).join('').length}
+          onBlacklistChange={updateBlacklist}
+          onLikelistChange={updateLikelist}
+          onCharBlacklistChange={updateCharBlacklist}
+          onCharLikelistChange={updateCharLikelist}
+          onAddToViewedList={addCurrentPageToViewedList}
+          onRemoveFromViewedList={removeCurrentPageFromViewedList}
         ></NameList>
       </Card>
     </div>

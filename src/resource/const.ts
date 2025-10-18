@@ -27,6 +27,9 @@ export const Storage_Key_Map = {
   Char_Level: `${Base_Storage_Key}_Char_Level`,
   Gender_Type: `${Base_Storage_Key}_Gender_Type`,
   是否乱序展示候选名: `${Base_Storage_Key}_是否乱序展示候选名`,
+  当前候选字库: `${Base_Storage_Key}_当前候选字库`,
+  已阅览名单: `${Base_Storage_Key}_已阅览名单`,
+  必选字不能同音: `${Base_Storage_Key}_必选字不能同音`,
 };
 
 export const Char_Specify_Option = {

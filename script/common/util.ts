@@ -104,6 +104,15 @@ export function is汉字(item: string) {
 }
 
 /**
+ * 检查是否是汉字
+ * @param item
+ * @returns
+ */
+export function is汉字String(item: string) {
+  return item.split('').every(char => is汉字(char));
+}
+
+/**
  * 检查是否是合法字符
  * @param char
  * @returns
