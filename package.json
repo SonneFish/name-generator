@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start": "vite",
-    "start:5174": "vite --port 5174",
+    "start:5174": "vite --port 5174 --open",
     "dev": "npm run start",
     "serve": "vite preview",
     "dev:5174": "npm run start:5174",
