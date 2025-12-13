@@ -132,38 +132,62 @@ export const CharDb_Level_Option = {
   ["标准字库"]: "标准字库" as const,
 };
 
+const t_min1 = performance.now();
+const level_min1 = utils.generatePinyinOptionList(PinyinDb_Min_1);
+console.log(`[启动日志] 构建拼音候选(至少出现1次)耗时: ${(performance.now() - t_min1).toFixed(1)}ms, 数量=${level_min1.length}`);
+const t_min5 = performance.now();
+const level_min5 = utils.generatePinyinOptionList(PinyinDb_Min_5);
+console.log(`[启动日志] 构建拼音候选(至少出现5次)耗时: ${(performance.now() - t_min5).toFixed(1)}ms, 数量=${level_min5.length}`);
+const t_min10 = performance.now();
+const level_min10 = utils.generatePinyinOptionList(PinyinDb_Min_10);
+console.log(`[启动日志] 构建拼音候选(至少出现10次)耗时: ${(performance.now() - t_min10).toFixed(1)}ms, 数量=${level_min10.length}`);
+const t_min50 = performance.now();
+const level_min50 = utils.generatePinyinOptionList(PinyinDb_Min_50);
+console.log(`[启动日志] 构建拼音候选(至少出现50次)耗时: ${(performance.now() - t_min50).toFixed(1)}ms, 数量=${level_min50.length}`);
+const t_min100 = performance.now();
+const level_min100 = utils.generatePinyinOptionList(PinyinDb_Min_100);
+console.log(`[启动日志] 构建拼音候选(至少出现100次)耗时: ${(performance.now() - t_min100).toFixed(1)}ms, 数量=${level_min100.length}`);
+const t_std = performance.now();
+const level_std = utils.generatePinyinOptionList(PinyinDb_Standard_Char);
+console.log(`[启动日志] 构建拼音候选(标准字库)耗时: ${(performance.now() - t_std).toFixed(1)}ms, 数量=${level_std.length}`);
+
 export const CharDb_Level_Item: Record<
   Type.CharDbLevel,
   CommonType.Pinyin_Of_Char[]
 > = {
-  [CharDb_Level_Option["至少出现1次"]]:
-    utils.generatePinyinOptionList(PinyinDb_Min_1),
-  [CharDb_Level_Option["至少出现5次"]]:
-    utils.generatePinyinOptionList(PinyinDb_Min_5),
-  [CharDb_Level_Option["至少出现10次"]]:
-    utils.generatePinyinOptionList(PinyinDb_Min_10),
-  [CharDb_Level_Option["至少出现50次"]]:
-    utils.generatePinyinOptionList(PinyinDb_Min_50),
-  [CharDb_Level_Option["至少出现100次"]]:
-    utils.generatePinyinOptionList(PinyinDb_Min_100),
-  [CharDb_Level_Option["标准字库"]]: utils.generatePinyinOptionList(
-    PinyinDb_Standard_Char
-  ),
+  [CharDb_Level_Option["至少出现1次"]]: level_min1,
+  [CharDb_Level_Option["至少出现5次"]]: level_min5,
+  [CharDb_Level_Option["至少出现10次"]]: level_min10,
+  [CharDb_Level_Option["至少出现50次"]]: level_min50,
+  [CharDb_Level_Option["至少出现100次"]]: level_min100,
+  [CharDb_Level_Option["标准字库"]]: level_std,
 };
+const ct_min1_t = performance.now();
+const ct_min1 = utils.getCharCountInPinyinDb(PinyinDb_Min_1);
+console.log(`[启动日志] 计数字库(至少出现1次)耗时: ${(performance.now() - ct_min1_t).toFixed(1)}ms, 候选字数=${ct_min1}`);
+const ct_min5_t = performance.now();
+const ct_min5 = utils.getCharCountInPinyinDb(PinyinDb_Min_5);
+console.log(`[启动日志] 计数字库(至少出现5次)耗时: ${(performance.now() - ct_min5_t).toFixed(1)}ms, 候选字数=${ct_min5}`);
+const ct_min10_t = performance.now();
+const ct_min10 = utils.getCharCountInPinyinDb(PinyinDb_Min_10);
+console.log(`[启动日志] 计数字库(至少出现10次)耗时: ${(performance.now() - ct_min10_t).toFixed(1)}ms, 候选字数=${ct_min10}`);
+const ct_min50_t = performance.now();
+const ct_min50 = utils.getCharCountInPinyinDb(PinyinDb_Min_50);
+console.log(`[启动日志] 计数字库(至少出现50次)耗时: ${(performance.now() - ct_min50_t).toFixed(1)}ms, 候选字数=${ct_min50}`);
+const ct_min100_t = performance.now();
+const ct_min100 = utils.getCharCountInPinyinDb(PinyinDb_Min_100);
+console.log(`[启动日志] 计数字库(至少出现100次)耗时: ${(performance.now() - ct_min100_t).toFixed(1)}ms, 候选字数=${ct_min100}`);
+const ct_std_t = performance.now();
+const ct_std = utils.getCharCountInPinyinDb(PinyinDb_Standard_Char);
+console.log(`[启动日志] 计数字库(标准字库)耗时: ${(performance.now() - ct_std_t).toFixed(1)}ms, 候选字数=${ct_std}`);
+
 export const CharDb_Char_Item_Count: Record<Type.CharDbLevel, number> = {
-  [CharDb_Level_Option["至少出现1次"]]:
-    utils.getCharCountInPinyinDb(PinyinDb_Min_1),
-  [CharDb_Level_Option["至少出现5次"]]:
-    utils.getCharCountInPinyinDb(PinyinDb_Min_5),
-  [CharDb_Level_Option["至少出现10次"]]:
-    utils.getCharCountInPinyinDb(PinyinDb_Min_10),
-  [CharDb_Level_Option["至少出现50次"]]:
-    utils.getCharCountInPinyinDb(PinyinDb_Min_50),
-  [CharDb_Level_Option["至少出现100次"]]:
-    utils.getCharCountInPinyinDb(PinyinDb_Min_100),
-  [CharDb_Level_Option["标准字库"]]: utils.getCharCountInPinyinDb(
-    PinyinDb_Standard_Char
-  ),
+  [CharDb_Level_Option["至少出现1次"]]: ct_min1,
+  [CharDb_Level_Option["至少出现5次"]]: ct_min5,
+  [CharDb_Level_Option["至少出现10次"]]: ct_min10,
+  [CharDb_Level_Option["至少出现50次"]]: ct_min50,
+  [CharDb_Level_Option["至少出现100次"]]: ct_min100,
+  [CharDb_Level_Option["标准字库"]]: ct_std,
 };
 
 export const CharDb_Level_Show: Record<Type.CharDbLevel, string> = {
