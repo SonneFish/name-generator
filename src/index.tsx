@@ -18,6 +18,7 @@ import {
   message,
   Select,
   Space,
+  Spin,
   Switch,
   Typography,
   Tabs,
@@ -25,7 +26,6 @@ import {
   Tag,
   Modal,
 } from "antd";
-import VirtualList from "rc-virtual-list";
 import Desc from "./desc";
 import Tip from "./component/tip";
 import * as utils from "@src/utils";
@@ -33,6 +33,7 @@ import * as Type from "@src/resource/type";
 import * as Const from "@src/resource/const";
 import NameList from "@src/component/name_list";
 import { saveAs } from "file-saver";
+import VirtualList from "rc-virtual-list";
 
 const default_char_level = utils.getValueByStorage<Type.CharDbLevel>(
   Const.Storage_Key_Map.Char_Level,
@@ -167,11 +168,102 @@ export default () => {
     const savedViewedList = localStorage.getItem('nameViewedList');
     return savedViewedList ? JSON.parse(savedViewedList) : [];
   });
+  const [customNameList, setCustomNameList] = useState<string[]>(() => {
+    const saved = utils.getValueByStorage<string>(Const.Storage_Key_Map.自定义名字库, "[]");
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
   const [isBlacklistModalOpen, setBlacklistModalOpen] = useState(false);
   const [isLikelistModalOpen, setLikelistModalOpen] = useState(false);
   const [isCharBlacklistModalOpen, setCharBlacklistModalOpen] = useState(false);
   const [isViewedListModalOpen, setViewedListModalOpen] = useState(false);
+  const [isCustomNameModalOpen, setCustomNameModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+
+  const MODAL_VLIST_HEIGHT = 400;
+  const MODAL_VLIST_ITEM_HEIGHT = 40;
+
+  const renderVirtualTagList = (params: {
+    items: string[];
+    color: string;
+    prefix?: string;
+    tagsPerRow: number;
+    emptyText: string;
+    itemKeyPrefix: string;
+    onCloseItem: (value: string) => void;
+  }) => {
+    const {
+      items,
+      color,
+      prefix,
+      tagsPerRow,
+      emptyText,
+      itemKeyPrefix,
+      onCloseItem,
+    } = params;
+
+    if (!items || items.length === 0) {
+      return <span style={{ color: "#999" }}>{emptyText}</span>;
+    }
+
+    const rows: { key: string; items: string[] }[] = [];
+    for (let i = 0; i < items.length; i += tagsPerRow) {
+      rows.push({
+        key: `${itemKeyPrefix}-row-${i / tagsPerRow}`,
+        items: items.slice(i, i + tagsPerRow),
+      });
+    }
+
+    return (
+      <div style={{ maxHeight: MODAL_VLIST_HEIGHT, overflow: "hidden" }}>
+        <VirtualList
+          data={rows}
+          height={MODAL_VLIST_HEIGHT}
+          itemHeight={MODAL_VLIST_ITEM_HEIGHT}
+          itemKey={(row) => row.key}
+        >
+          {(row) => (
+            <div
+              style={{
+                height: MODAL_VLIST_ITEM_HEIGHT,
+                display: "flex",
+                alignItems: "center",
+                padding: "0 4px",
+                gap: 8,
+              }}
+            >
+              {row.items.map((value) => (
+                <Tag
+                  key={`${row.key}-${value}`}
+                  color={color}
+                  closable
+                  onClose={() => onCloseItem(value)}
+                  style={{ display: "inline-flex", alignItems: "center" }}
+                >
+                  <span
+                    style={{
+                      maxWidth: 160,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      display: "inline-block",
+                    }}
+                  >
+                    {prefix}
+                    {value}
+                  </span>
+                </Tag>
+              ))}
+            </div>
+          )}
+        </VirtualList>
+      </div>
+    );
+  };
   let str_姓氏 = utils.removeUnChineseChar(input_姓氏);
   let str_必选字 = utils.removeUnChineseChar(input_必选字);
   let str_排除字列表 = utils.removeUnChineseChar(input_排除字列表);
@@ -182,9 +274,6 @@ export default () => {
   const const_col_标题_span = 4;
   const const_col_输入框_span = 20;
   const MAX_TAG_PREVIEW = 50;
-  const VIRTUAL_LIST_HEIGHT = 400;
-  const VIRTUAL_ITEM_HEIGHT = 36;
-  const DEFAULT_VIRTUAL_TAGS_PER_ROW = 6;
 
   let flag姓氏最后一字是否为多音字 = char_姓_末尾字_PinyinList.length > 1;
   let flag已确认姓氏最后一字发音 = true;
@@ -285,6 +374,81 @@ export default () => {
   const updateViewedList = (newViewedList: string[]) => {
     setViewedList(newViewedList);
     localStorage.setItem('nameViewedList', JSON.stringify(newViewedList));
+  };
+
+  const updateCustomNameList = (newList: string[]) => {
+    const uniq = Array.from(new Set(newList)).filter(Boolean);
+    setCustomNameList(uniq);
+    utils.setValueByStorage(Const.Storage_Key_Map.自定义名字库, JSON.stringify(uniq));
+  };
+
+  const importCustomNameList = () => {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.txt,.csv,.md,.log,text/plain';
+
+    fileInput.onchange = (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = String(e.target?.result ?? "");
+          const lines = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+          // 去掉姓氏：优先按“当前姓氏”前缀移除；否则按常见 3/4 字全名截取后两字
+          const surnameStr = utils.removeUnChineseChar(input_姓氏);
+
+          const imported: string[] = [];
+          let skipped = 0;
+          for (const line of lines) {
+            const onlyChinese = utils.removeUnChineseChar(line);
+            if (!onlyChinese) {
+              skipped++;
+              continue;
+            }
+
+            let givenName = "";
+            if (surnameStr && onlyChinese.startsWith(surnameStr) && onlyChinese.length >= surnameStr.length + 2) {
+              const rest = onlyChinese.slice(surnameStr.length);
+              if (rest.length === 2) {
+                givenName = rest;
+              } else {
+                // 兜底：取最后两个字
+                givenName = rest.slice(-2);
+              }
+            } else if (onlyChinese.length === 2) {
+              givenName = onlyChinese;
+            } else if (onlyChinese.length === 3) {
+              givenName = onlyChinese.slice(1);
+            } else if (onlyChinese.length === 4) {
+              givenName = onlyChinese.slice(2);
+            } else {
+              skipped++;
+              continue;
+            }
+
+            if (givenName.length !== 2) {
+              skipped++;
+              continue;
+            }
+            imported.push(givenName);
+          }
+
+          const merged = Array.from(new Set([...(customNameList || []), ...imported]));
+          updateCustomNameList(merged);
+          message.success(`自定义名字库导入完成：新增 ${new Set(imported).size} 条，跳过 ${skipped} 条`);
+        } catch (err) {
+          message.error('导入失败，请检查文件内容');
+          console.error('自定义名字库导入失败:', err);
+        }
+      };
+
+      reader.readAsText(file);
+    };
+
+    fileInput.click();
   };
 
   // 添加当前页所有姓名到已阅览名单
@@ -588,12 +752,17 @@ export default () => {
     Const.Choose_Type_Option["财富论-集思录"],
     Const.Choose_Type_Option["诗云-按发音合并"],
     Const.Choose_Type_Option["诗云-所有可能"],
+    Const.Choose_Type_Option["单字随机重组"],
+    Const.Choose_Type_Option["自定义名字库"],
   ]) {
     listConfigList.push({
       title: key,
       description: Const.Choose_Type_Desc[key].desc,
       comment: Const.Choose_Type_Desc[key].comment,
-      optionCount: Const.Choose_Type_Desc[key].optionCount,
+      optionCount:
+        key === Const.Choose_Type_Option["自定义名字库"]
+          ? customNameList.length
+          : Const.Choose_Type_Desc[key].optionCount,
     });
   }
 
@@ -605,79 +774,6 @@ export default () => {
   const charBlacklistHasMore = charBlacklist.length > MAX_TAG_PREVIEW;
   const viewedPreview = viewedList.slice(0, MAX_TAG_PREVIEW);
   const viewedHasMore = viewedList.length > MAX_TAG_PREVIEW;
-
-  const renderVirtualTagList = (params: {
-    items: string[];
-    color: string;
-    prefix?: string;
-    tagsPerRow?: number;
-    itemKeyPrefix: string;
-    onCloseItem: (name: string) => void;
-  }) => {
-    const {
-      items,
-      color,
-      prefix = "",
-      tagsPerRow = DEFAULT_VIRTUAL_TAGS_PER_ROW,
-      itemKeyPrefix,
-      onCloseItem,
-    } = params;
-    if (items.length === 0) {
-      return <span style={{ color: "#999" }}>暂无数据</span>;
-    }
-
-    // 将一维数组拆成每行多个 tag 的二维数组
-    const rows: string[][] = [];
-    for (let i = 0; i < items.length; i += tagsPerRow) {
-      rows.push(items.slice(i, i + tagsPerRow));
-    }
-
-    return (
-      <div style={{ border: "1px solid #f0f0f0", borderRadius: 6 }}>
-        <VirtualList
-          data={rows}
-          height={VIRTUAL_LIST_HEIGHT}
-          itemHeight={VIRTUAL_ITEM_HEIGHT}
-          itemKey={(row: string[]) => `${itemKeyPrefix}-row-${row.join("|")}`}
-        >
-          {(rowItems: string[], rowIndex: number) => (
-            <div
-              style={{
-                height: VIRTUAL_ITEM_HEIGHT,
-                display: "flex",
-                alignItems: "center",
-                padding: "0 8px",
-                gap: 8,
-              }}
-            >
-              {rowItems.map((name) => (
-                <Tag
-                  key={`${itemKeyPrefix}-${rowIndex}-${name}`}
-                  color={color}
-                  closable
-                  onClose={() => onCloseItem(name)}
-                  style={{ display: "inline-flex", alignItems: "center" }}
-                >
-                  <span
-                    style={{
-                      maxWidth: 150,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      display: "inline-block",
-                    }}
-                  >
-                    {prefix}
-                    {name}
-                  </span>
-                </Tag>
-              ))}
-            </div>
-          )}
-        </VirtualList>
-      </div>
-    );
-  };
 
   return (
     <div className="root-9969b06-block">
@@ -934,6 +1030,14 @@ export default () => {
                 store.status.currentTab = item.title;
                 utils.setValueByStorage(Const.Storage_Key_Map.当前候选字库, item.title);
                 Tools.reset();
+
+                if (item.title === Const.Choose_Type_Option["自定义名字库"]) {
+                  if (customNameList.length === 0) {
+                    message.info("自定义名字库暂无数据，请先导入或添加名字");
+                  } else {
+                    message.info(`当前自定义名字库共有 ${customNameList.length} 条记录`);
+                  }
+                }
               }}
             >
               <Card hoverable type="inner" title={item.title}>
@@ -1357,6 +1461,94 @@ export default () => {
               </div>
             </Card>
           </Col>
+
+          <Col span={6}>
+            <Card
+              title={
+                <span>
+                  自定义名字库
+                  <Tip title="选中候选字库里的“自定义名字库”时，会用这里的名字生成候选方案"></Tip>
+                </span>
+              }
+              size="small"
+              extra={
+                <Space>
+                  <Button size="small" onClick={importCustomNameList}>
+                    导入
+                  </Button>
+                  <Button
+                    size="small"
+                    danger
+                    onClick={() => {
+                      updateCustomNameList([]);
+                      message.success('自定义名字库已清空');
+                    }}
+                  >
+                    清空
+                  </Button>
+                </Space>
+              }
+            >
+              <div style={{ marginBottom: '8px' }}>
+                <Input
+                  placeholder="输入两个字的名后按回车添加"
+                  size="small"
+                  onPressEnter={(e) => {
+                    const input = e.target as HTMLInputElement;
+                    const value = utils.removeUnChineseChar(input.value.trim());
+                    if (!value) return;
+                    if (value.length !== 2) {
+                      message.warning('仅支持两个字的名');
+                      return;
+                    }
+                    if (customNameList.includes(value)) {
+                      message.info(`"${input_姓氏}${value}" 已在自定义名字库中`);
+                      return;
+                    }
+                    updateCustomNameList([...customNameList, value]);
+                    message.success(`已添加 "${input_姓氏}${value}" 到自定义名字库`);
+                    input.value = '';
+                  }}
+                />
+              </div>
+              <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
+                {customNameList.length > 0 ? (
+                  <>
+                    {customNameList.slice(0, MAX_TAG_PREVIEW).map((name: string, index: number) => (
+                      <Tag
+                        key={`custom-${name}-${index}`}
+                        color="cyan"
+                        closable
+                        onClose={() => {
+                          const newList = customNameList.filter((item: string) => item !== name);
+                          updateCustomNameList(newList);
+                          message.success(`已从自定义名字库移除 "${input_姓氏}${name}"`);
+                        }}
+                      >
+                        {input_姓氏}{name}
+                      </Tag>
+                    ))}
+                    {customNameList.length > MAX_TAG_PREVIEW && (
+                      <div style={{ marginTop: 8 }}>
+                        <Button type="link" size="small" onClick={() => setCustomNameModalOpen(true)}>
+                          还有 {customNameList.length - MAX_TAG_PREVIEW} 个，查看全部
+                        </Button>
+                      </div>
+                    )}
+                    {customNameList.length <= MAX_TAG_PREVIEW && (
+                      <div style={{ marginTop: 8 }}>
+                        <Button type="link" size="small" onClick={() => setCustomNameModalOpen(true)}>
+                          查看全部
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <span style={{ color: '#999' }}>暂无自定义名字库</span>
+                )}
+              </div>
+            </Card>
+          </Col>
         </Row>
       </div>
       
@@ -1529,11 +1721,12 @@ export default () => {
           color: "red",
           prefix: input_姓氏,
           tagsPerRow: 6,
+          emptyText: "暂无黑名单",
           itemKeyPrefix: "full-black",
           onCloseItem: (name) => {
             const newBlacklist = blacklist.filter((item: string) => item !== name);
             updateBlacklist(newBlacklist);
-            message.success(`已从黑名单移除 \"${input_姓氏}${name}\"`);
+            message.success(`已从黑名单移除 "${input_姓氏}${name}"`);
             document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
           },
         })}
@@ -1550,11 +1743,12 @@ export default () => {
           color: "green",
           prefix: input_姓氏,
           tagsPerRow: 6,
+          emptyText: "暂无喜欢名单",
           itemKeyPrefix: "full-like",
           onCloseItem: (name) => {
             const newLikelist = likelist.filter((item: string) => item !== name);
             updateLikelist(newLikelist);
-            message.success(`已从喜欢名单移除 \"${input_姓氏}${name}\"`);
+            message.success(`已从喜欢名单移除 "${input_姓氏}${name}"`);
           },
         })}
       </Modal>
@@ -1569,11 +1763,12 @@ export default () => {
           items: charBlacklist,
           color: "orange",
           tagsPerRow: 12,
+          emptyText: "暂无单字黑名单",
           itemKeyPrefix: "full-char-black",
           onCloseItem: (char) => {
             const newCharBlacklist = charBlacklist.filter((item: string) => item !== char);
             updateCharBlacklist(newCharBlacklist);
-            message.success(`已从单字黑名单移除 \"${char}\"`);
+            message.success(`已从单字黑名单移除 "${char}"`);
             document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
           },
         })}
@@ -1590,11 +1785,52 @@ export default () => {
           color: "blue",
           prefix: input_姓氏,
           tagsPerRow: 6,
+          emptyText: "暂无已阅览名单",
           itemKeyPrefix: "full-viewed",
           onCloseItem: (name) => {
             const newViewedList = viewedList.filter((item: string) => item !== name);
             updateViewedList(newViewedList);
-            message.success(`已从已阅览名单移除 \"${input_姓氏}${name}\"`);
+            message.success(`已从已阅览名单移除 "${input_姓氏}${name}"`);
+            document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+          },
+        })}
+      </Modal>
+
+      <Modal
+        title={`自定义名字库（全部，共${customNameList.length}条）`}
+        open={isCustomNameModalOpen}
+        onCancel={() => setCustomNameModalOpen(false)}
+        footer={null}
+        width={700}
+      >
+        <div style={{ marginBottom: 8 }}>
+          <Space>
+            <Button size="small" onClick={importCustomNameList}>
+              导入名字文件
+            </Button>
+            <Button
+              size="small"
+              danger
+              onClick={() => {
+                updateCustomNameList([]);
+                message.success("自定义名字库已清空");
+                document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+              }}
+            >
+              清空
+            </Button>
+          </Space>
+        </div>
+        {renderVirtualTagList({
+          items: customNameList,
+          color: "cyan",
+          tagsPerRow: 8,
+          emptyText: "暂无自定义名字库",
+          itemKeyPrefix: "full-custom",
+          onCloseItem: (name) => {
+            const newList = customNameList.filter((item: string) => item !== name);
+            updateCustomNameList(newList);
+            message.success(`已从自定义名字库移除 \"${input_姓氏}${name}\"`);
             document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
           },
         })}
@@ -1615,7 +1851,7 @@ export default () => {
               return;
             }
 
-            Tools.reset();
+            // 生成时保留旧列表，避免 "No data" 闪烁和高度跳变
             store.status.isLoading = true;
             await utils.asyncSleep(100);
             console.log("开始生成候选人名");
@@ -1626,6 +1862,8 @@ export default () => {
               char_姓_末尾字: pinyin_of_姓_末尾字,
               char_必选字_list,
               char_排除字_list,
+              char_单字喜欢名单: charLikelist,
+              char_自定义名字库: customNameList,
               charSpecifyPos: snapshot.status.generateConfig.charSpecifyPos,
               generateType: snapshot.status.currentTab,
               pinyinOptionList: pinyinOptionList,
@@ -1737,18 +1975,21 @@ export default () => {
         </Button>
       </Col>
       
-      <Card title="" variant="borderless" loading={snapshot.status.isLoading}>
-        <NameList
-          nameList={snapshot.previewNameList as CommonType.Type_Name[]}
-          columnCount={snapshot.columnCount}
-          surnameLength={char_姓_全部.map(item => item.char).join('').length}
-          onBlacklistChange={updateBlacklist}
-          onLikelistChange={updateLikelist}
-          onCharBlacklistChange={updateCharBlacklist}
-          onCharLikelistChange={updateCharLikelist}
-          onAddToViewedList={addCurrentPageToViewedList}
-          onRemoveFromViewedList={removeCurrentPageFromViewedList}
-        ></NameList>
+      <Card title="" variant="borderless">
+        <Spin spinning={snapshot.status.isLoading} tip="生成中...">
+          <NameList
+            loading={snapshot.status.isLoading}
+            nameList={snapshot.previewNameList as CommonType.Type_Name[]}
+            columnCount={snapshot.columnCount}
+            surnameLength={char_姓_全部.map(item => item.char).join('').length}
+            onBlacklistChange={updateBlacklist}
+            onLikelistChange={updateLikelist}
+            onCharBlacklistChange={updateCharBlacklist}
+            onCharLikelistChange={updateCharLikelist}
+            onAddToViewedList={addCurrentPageToViewedList}
+            onRemoveFromViewedList={removeCurrentPageFromViewedList}
+          ></NameList>
+        </Spin>
       </Card>
     </div>
   );

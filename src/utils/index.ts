@@ -157,6 +157,8 @@ export function generateLegalNameList({
   char_姓_末尾字,
   char_排除字_list = [],
   char_必选字_list = [],
+  char_单字喜欢名单 = [],
+  char_自定义名字库 = [],
   pinyinOptionList,
   generateType,
   charSpecifyPos,
@@ -180,6 +182,14 @@ export function generateLegalNameList({
    * 若必选字同音, 则只保留第一个必选字
    */
   char_必选字_list?: CommonType.Char_With_Pinyin[];
+  /**
+   * 单字喜欢名单（仅用于“单字随机重组”字库）
+   */
+  char_单字喜欢名单?: string[];
+  /**
+   * 自定义名字库（仅用于“自定义名字库”字库），每项为两个字的名（不含姓氏）
+   */
+  char_自定义名字库?: string[];
   /**
    * 必选字位置
    */
@@ -216,6 +226,28 @@ export function generateLegalNameList({
         generateAll,
         enableFilterSamePinyinMustHaveChars,
       });
+    case Const.Choose_Type_Option["单字随机重组"]:
+      return generateLegalNameListBy单字随机重组({
+        char_姓_全部,
+        char_姓_末尾字,
+        char_待排除的同音字_list: char_排除字_list,
+        char_必选字_list,
+        char_单字喜欢名单,
+        charSpecifyPos,
+        generateAll,
+        enableFilterSamePinyinMustHaveChars,
+      });
+    case Const.Choose_Type_Option["自定义名字库"]:
+      return generateLegalNameListBy自定义名字库({
+        char_姓_全部,
+        char_姓_末尾字,
+        char_待排除的同音字_list: char_排除字_list,
+        char_必选字_list,
+        charSpecifyPos,
+        legalNameList: char_自定义名字库,
+        generateAll,
+        enableFilterSamePinyinMustHaveChars,
+      });
     case Const.Choose_Type_Option["五道口-精选集"]:
     case Const.Choose_Type_Option["五道口-集思录"]:
     case Const.Choose_Type_Option["他山石"]:
@@ -234,6 +266,321 @@ export function generateLegalNameList({
         enableFilterSamePinyinMustHaveChars,
       });
   }
+
+  // 理论上不会走到这里；用于保证 TS 认为一定有返回值
+  return [];
+}
+
+/**
+ * 基于“自定义名字库”生成候选名
+ */
+export function generateLegalNameListBy自定义名字库({
+  char_姓_全部,
+  char_姓_末尾字,
+  char_待排除的同音字_list = [],
+  char_必选字_list = [],
+  charSpecifyPos,
+  legalNameList = [],
+  generateAll = false,
+  enableFilterSamePinyinMustHaveChars = true,
+}: {
+  char_姓_全部: CommonType.Char_With_Pinyin[];
+  char_姓_末尾字: CommonType.Char_With_Pinyin;
+  char_待排除的同音字_list?: CommonType.Char_With_Pinyin[];
+  char_必选字_list?: CommonType.Char_With_Pinyin[];
+  charSpecifyPos: Type.CharSpecifyPos;
+  legalNameList?: string[];
+  generateAll?: boolean;
+  enableFilterSamePinyinMustHaveChars?: boolean;
+}) {
+  let nameList: CommonType.Type_Name[] = [];
+
+  // 清洗：仅保留两个字的名
+  legalNameList = (legalNameList || [])
+    .filter((n) => typeof n === "string")
+    .map((n) => removeUnChineseChar(n.trim()))
+    .filter((n) => n.length === 2);
+
+  if (legalNameList.length === 0) {
+    return [];
+  }
+
+  const pinyinSet_同音字 = new Set<string>();
+  for (let char of char_待排除的同音字_list) {
+    pinyinSet_同音字.add(char.pinyin);
+  }
+
+  // 必选字不能同音（根据开关状态决定是否执行）
+  if (enableFilterSamePinyinMustHaveChars) {
+    let buf_过滤同音必选字: Record<string, CommonType.Char_With_Pinyin> = {};
+    for (let char_必选字 of char_必选字_list) {
+      if (buf_过滤同音必选字[char_必选字.pinyin] === undefined) {
+        buf_过滤同音必选字[char_必选字.pinyin] = char_必选字;
+      }
+    }
+    char_必选字_list = [...Object.values(buf_过滤同音必选字)];
+  }
+
+  // 首先按必选字进行过滤
+  const set_必选字 = new Set<string>();
+  for (let char_必选字 of char_必选字_list) {
+    set_必选字.add(char_必选字.char);
+  }
+
+  if (char_必选字_list.length > 0) {
+    const isSecondPosition = charSpecifyPos === Const.Char_Specify_Option.第二位;
+    const isThirdPosition = charSpecifyPos === Const.Char_Specify_Option.第三位;
+
+    legalNameList = legalNameList.filter((item) => {
+      let [char_1, char_2] = item.split("");
+      const hasChar1 = set_必选字.has(char_1);
+      const hasChar2 = set_必选字.has(char_2);
+      if (!hasChar1 && !hasChar2) return false;
+      if ((isSecondPosition && !hasChar1) || (isThirdPosition && !hasChar2)) return false;
+      return true;
+    });
+  }
+
+  // 将候选字转换为拼音序列
+  let legalPinyinNameList = legalNameList.map((item) => {
+    let [char_1, char_2] = item.split("");
+    let pinyin_char_1 = getPinyinOfChar(char_1)[0];
+    let pinyin_char_2 = getPinyinOfChar(char_2)[0];
+    return {
+      pinyin_char_1,
+      pinyin_char_2,
+    };
+  });
+
+  // 排除不合法的发音
+  const flag_第二位指定了候选字_执行特殊音韵检查逻辑 =
+    set_必选字.size > 0 && charSpecifyPos === Const.Char_Specify_Option.第二位;
+
+  legalPinyinNameList = legalPinyinNameList.filter((item) => {
+    if (pinyinSet_同音字.has(item.pinyin_char_1.pinyin)) return false;
+    if (pinyinSet_同音字.has(item.pinyin_char_2.pinyin)) return false;
+
+    if (flag_第二位指定了候选字_执行特殊音韵检查逻辑) {
+      if (!Util.isCharPairLegal({
+        charList: [item.pinyin_char_1, item.pinyin_char_2],
+        type: "last_2_char",
+      })) {
+        return false;
+      }
+    } else {
+      if (!Util.isCharPairLegal({
+        charList: [char_姓_末尾字, item.pinyin_char_1, item.pinyin_char_2],
+        type: "full_name",
+      })) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  const surnameStr = char_姓_全部.map((item) => item.char).join("");
+  for (let legalPinyinName of legalPinyinNameList) {
+    let pinyin_1 = legalPinyinName.pinyin_char_1;
+    let pinyin_2 = legalPinyinName.pinyin_char_2;
+
+    const name: CommonType.Type_Name = {
+      姓氏: char_姓_全部,
+      人名_第一个字: {
+        ...pinyin_1,
+        char_list: [pinyin_1],
+      },
+      人名_第二个字: {
+        ...pinyin_2,
+        char_list: [pinyin_2],
+      },
+      demoStr: `${surnameStr}${pinyin_1.char}${pinyin_2.char}`,
+      score: getScoreOfName(pinyin_1.char, pinyin_2.char),
+    };
+    nameList.push(name);
+
+    if (generateAll === false && nameList.length >= Const.Max_Display_Item) {
+      return nameList;
+    }
+  }
+
+  return nameList;
+}
+
+/**
+ * 使用“单字喜欢名单”中的字两两组合生成候选名
+ */
+export function generateLegalNameListBy单字随机重组({
+  char_姓_全部,
+  char_姓_末尾字,
+  char_待排除的同音字_list = [],
+  char_必选字_list = [],
+  char_单字喜欢名单 = [],
+  charSpecifyPos,
+  generateAll = false,
+  enableFilterSamePinyinMustHaveChars = true,
+}: {
+  char_姓_全部: CommonType.Char_With_Pinyin[];
+  char_姓_末尾字: CommonType.Char_With_Pinyin;
+  char_待排除的同音字_list?: CommonType.Char_With_Pinyin[];
+  char_必选字_list?: CommonType.Char_With_Pinyin[];
+  char_单字喜欢名单?: string[];
+  charSpecifyPos: Type.CharSpecifyPos;
+  generateAll?: boolean;
+  enableFilterSamePinyinMustHaveChars?: boolean;
+}) {
+  let nameList: CommonType.Type_Name[] = [];
+
+  const rawLikedList = (char_单字喜欢名单 || []) as any[];
+  const likedChars = rawLikedList
+    .map((c) => {
+      if (typeof c === "string") return c.trim();
+      if (c && typeof c === "object" && typeof c.char === "string") return c.char.trim();
+      return "";
+    })
+    .filter((c) => c.length === 1 && Util.is汉字(c));
+  if (likedChars.length < 2) {
+    console.log(
+      `[生成日志] 单字随机重组: 单字喜欢名单不足2个，size=${likedChars.length}`
+    );
+    if (rawLikedList.length > 0) {
+      console.log(
+        `[生成日志] 单字随机重组: 原始单字喜欢名单前10项=${JSON.stringify(
+          rawLikedList.slice(0, 10)
+        )}`
+      );
+    }
+    return [];
+  }
+
+  // 若设置了必选字，但必选字与“单字喜欢名单”完全无交集，则会导致结果必然为空。
+  // 在该模式下优先满足“从单字喜欢名单生成”，因此自动忽略这类必选字限制。
+  const likedCharSet = new Set(likedChars);
+  const mustHaveSetRaw = new Set<string>();
+  for (let char_必选字 of char_必选字_list) {
+    mustHaveSetRaw.add(char_必选字.char);
+  }
+  if (mustHaveSetRaw.size > 0) {
+    let intersection = 0;
+    for (const c of mustHaveSetRaw) {
+      if (likedCharSet.has(c)) intersection++;
+    }
+    if (intersection === 0) {
+      console.log(
+        `[生成日志] 单字随机重组: 必选字与单字喜欢名单无交集，已忽略必选字限制。必选字=${mustHaveSetRaw.size}, 喜欢字=${likedChars.length}`
+      );
+      char_必选字_list = [];
+    }
+  }
+
+  const pinyinSet_同音字 = new Set<string>();
+  for (let char of char_待排除的同音字_list) {
+    pinyinSet_同音字.add(char.pinyin);
+  }
+
+  // 必选字不能同音（根据开关状态决定是否执行）
+  if (enableFilterSamePinyinMustHaveChars) {
+    let buf_过滤同音必选字: Record<string, CommonType.Char_With_Pinyin> = {};
+    for (let char_必选字 of char_必选字_list) {
+      if (buf_过滤同音必选字[char_必选字.pinyin] === undefined) {
+        buf_过滤同音必选字[char_必选字.pinyin] = char_必选字;
+      }
+    }
+    char_必选字_list = [...Object.values(buf_过滤同音必选字)];
+  }
+
+  const set_必选字 = new Set<string>();
+  for (let char_必选字 of char_必选字_list) {
+    set_必选字.add(char_必选字.char);
+  }
+
+  const isSecondPosition = charSpecifyPos === Const.Char_Specify_Option.第二位;
+  const isThirdPosition = charSpecifyPos === Const.Char_Specify_Option.第三位;
+  const flag_第二位指定了候选字_执行特殊音韵检查逻辑 =
+    set_必选字.size > 0 && isSecondPosition;
+
+  const surnameStr = char_姓_全部.map((item) => item.char).join("");
+
+  // 将喜欢字映射为拼音对象（默认取第一个读音）
+  const likedPinyinList: CommonType.Char_With_Pinyin[] = [];
+  for (const ch of likedChars) {
+    const pList = getPinyinOfChar(ch);
+    if (pList && pList.length > 0) {
+      likedPinyinList.push({
+        ...pList[0],
+      });
+    }
+  }
+
+  if (likedPinyinList.length < 2) {
+    console.log(
+      `[生成日志] 单字随机重组: 可用拼音映射不足2个，likedChars=${likedChars.length}, mapped=${likedPinyinList.length}`
+    );
+    return [];
+  }
+
+  for (let i = 0; i < likedPinyinList.length; i++) {
+    for (let j = 0; j < likedPinyinList.length; j++) {
+      const pinyin_1 = likedPinyinList[i];
+      const pinyin_2 = likedPinyinList[j];
+
+      // 排除同音字
+      if (pinyinSet_同音字.has(pinyin_1.pinyin) || pinyinSet_同音字.has(pinyin_2.pinyin)) {
+        continue;
+      }
+
+      // 必选字位置检查
+      if (set_必选字.size > 0) {
+        const hasChar1 = set_必选字.has(pinyin_1.char);
+        const hasChar2 = set_必选字.has(pinyin_2.char);
+        if ((isSecondPosition && !hasChar1) || (isThirdPosition && !hasChar2) || (!isSecondPosition && !isThirdPosition && !hasChar1 && !hasChar2)) {
+          continue;
+        }
+      }
+
+      // 音韵检查
+      if (flag_第二位指定了候选字_执行特殊音韵检查逻辑) {
+        if (
+          !Util.isCharPairLegal({
+            charList: [pinyin_1, pinyin_2],
+            type: "last_2_char",
+          })
+        ) {
+          continue;
+        }
+      } else {
+        if (
+          !Util.isCharPairLegal({
+            charList: [char_姓_末尾字, pinyin_1, pinyin_2],
+            type: "full_name",
+          })
+        ) {
+          continue;
+        }
+      }
+
+      const name: CommonType.Type_Name = {
+        姓氏: char_姓_全部,
+        人名_第一个字: {
+          ...pinyin_1,
+          char_list: [pinyin_1],
+        },
+        人名_第二个字: {
+          ...pinyin_2,
+          char_list: [pinyin_2],
+        },
+        demoStr: `${surnameStr}${pinyin_1.char}${pinyin_2.char}`,
+        score: getScoreOfName(pinyin_1.char, pinyin_2.char),
+      };
+      nameList.push(name);
+
+      if (generateAll === false && nameList.length >= Const.Max_Display_Item) {
+        return nameList;
+      }
+    }
+  }
+
+  return nameList;
 }
 
 /**

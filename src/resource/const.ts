@@ -30,6 +30,7 @@ export const Storage_Key_Map = {
   当前候选字库: `${Base_Storage_Key}_当前候选字库`,
   已阅览名单: `${Base_Storage_Key}_已阅览名单`,
   必选字不能同音: `${Base_Storage_Key}_必选字不能同音`,
+  自定义名字库: `${Base_Storage_Key}_自定义名字库`,
 };
 
 export const Char_Specify_Option = {
@@ -47,6 +48,8 @@ export const Gender_Type = {
 export const Choose_Type_Option = {
   [`诗云-按发音合并`]: `诗云-按发音合并` as const,
   [`诗云-所有可能`]: `诗云-所有可能` as const,
+  [`单字随机重组`]: `单字随机重组` as const,
+  [`自定义名字库`]: `自定义名字库` as const,
   [`古人云`]: `古人云` as const,
   [`他山石`]: `他山石` as const,
   [`财富论-精选集`]: `财富论-精选集` as const,
@@ -74,6 +77,16 @@ export const Choose_Type_Desc: Record<Type.ChooseType, {
     desc: `基于所选诗云字库文字, 生成所有可能组合`,
     optionCount: 0,
     comment: ""
+  },
+  [Choose_Type_Option["单字随机重组"]]: {
+    desc: `使用“单字喜欢名单”中的字随机重组成新名字`,
+    optionCount: 0,
+    comment: "将单字喜欢名单中的字两两组合生成候选名，可配合乱序展示与黑名单过滤",
+  },
+  [Choose_Type_Option["自定义名字库"]]: {
+    desc: `使用你导入的“自定义名字库”生成候选名`,
+    optionCount: 0,
+    comment: "导入文本文件：每行一个姓名；会自动去掉姓氏，仅保留两个字的名并去重",
   },
   [Choose_Type_Option.古人云]:
   {
