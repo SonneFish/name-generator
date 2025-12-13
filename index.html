@@ -27,6 +27,18 @@
     <title>诗云-起个好名字</title>
   </head>
   <body>
+    <script>
+      // 提前记录页面启动时间与导航时序
+      window.__appStart = performance.now();
+      try {
+        const nav = performance.getEntriesByType('navigation')[0];
+        if (nav) {
+          console.log(
+            `[启动日志] navigation: domContentLoaded=${(nav.domContentLoadedEventEnd - nav.startTime).toFixed(1)}ms, load=${(nav.loadEventEnd - nav.startTime).toFixed(1)}ms, responseEnd=${(nav.responseEnd - nav.startTime).toFixed(1)}ms`
+          );
+        }
+      } catch (e) {}
+    </script>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>

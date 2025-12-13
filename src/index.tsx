@@ -127,6 +127,18 @@ const store = proxy<{
 });
 
 export default () => {
+  try {
+    const start = (window as any).__appStart ?? performance.timeOrigin ?? performance.now();
+    console.log(`[启动日志] 模块到组件执行耗时: ${(performance.now() - start).toFixed(1)}ms`);
+    setTimeout(() => {
+      console.log(`[启动日志] 首次宏任务空闲时间: ${(performance.now() - start).toFixed(1)}ms`);
+    }, 0);
+    if ((window as any).requestIdleCallback) {
+      (window as any).requestIdleCallback(() => {
+        console.log(`[启动日志] 首次 requestIdleCallback 时间: ${(performance.now() - start).toFixed(1)}ms`);
+      });
+    }
+  } catch {}
   let snapshot = useSnapshot(store);
   let [input_姓氏, set_input_姓氏] = useState<string>(default_input_姓氏);
   let [input_排除字列表, set_input_排除字列表] =
@@ -154,6 +166,10 @@ export default () => {
     const savedViewedList = localStorage.getItem('nameViewedList');
     return savedViewedList ? JSON.parse(savedViewedList) : [];
   });
+  const [isBlacklistModalOpen, setBlacklistModalOpen] = useState(false);
+  const [isLikelistModalOpen, setLikelistModalOpen] = useState(false);
+  const [isCharBlacklistModalOpen, setCharBlacklistModalOpen] = useState(false);
+  const [isViewedListModalOpen, setViewedListModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   let str_姓氏 = utils.removeUnChineseChar(input_姓氏);
   let str_必选字 = utils.removeUnChineseChar(input_必选字);
@@ -164,6 +180,7 @@ export default () => {
 
   const const_col_标题_span = 4;
   const const_col_输入框_span = 20;
+  const MAX_TAG_PREVIEW = 50;
 
   let flag姓氏最后一字是否为多音字 = char_姓_末尾字_PinyinList.length > 1;
   let flag已确认姓氏最后一字发音 = true;
@@ -576,6 +593,15 @@ export default () => {
     });
   }
 
+  const blacklistPreview = blacklist.slice(0, MAX_TAG_PREVIEW);
+  const blacklistHasMore = blacklist.length > MAX_TAG_PREVIEW;
+  const likelistPreview = likelist.slice(0, MAX_TAG_PREVIEW);
+  const likelistHasMore = likelist.length > MAX_TAG_PREVIEW;
+  const charBlacklistPreview = charBlacklist.slice(0, MAX_TAG_PREVIEW);
+  const charBlacklistHasMore = charBlacklist.length > MAX_TAG_PREVIEW;
+  const viewedPreview = viewedList.slice(0, MAX_TAG_PREVIEW);
+  const viewedHasMore = viewedList.length > MAX_TAG_PREVIEW;
+
   return (
     <div className="root-9969b06-block">
       <Row align="middle">
@@ -908,22 +934,30 @@ export default () => {
               </div>
               <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
                 {blacklist.length > 0 ? (
-                  blacklist.map((name: string, index: number) => (
-                    <Tag 
-                      key={`${name}-${index}`} 
-                      color="red" 
-                      closable
-                      onClose={() => {
-                        const newBlacklist = blacklist.filter((item: string) => item !== name);
-                        updateBlacklist(newBlacklist);
-                        message.success(`已从黑名单移除 "${input_姓氏}${name}"`);
-                        // 重新生成候选名
-                        document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
-                      }}
-                    >
-                      {input_姓氏}{name}
-                    </Tag>
-                  ))
+                  <>
+                    {blacklistPreview.map((name: string, index: number) => (
+                      <Tag 
+                        key={`${name}-${index}`} 
+                        color="red" 
+                        closable
+                        onClose={() => {
+                          const newBlacklist = blacklist.filter((item: string) => item !== name);
+                          updateBlacklist(newBlacklist);
+                          message.success(`已从黑名单移除 "${input_姓氏}${name}"`);
+                          document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                        }}
+                      >
+                        {input_姓氏}{name}
+                      </Tag>
+                    ))}
+                    {blacklistHasMore && (
+                      <div style={{ marginTop: 8 }}>
+                        <Button type="link" size="small" onClick={() => setBlacklistModalOpen(true)}>
+                          还有 {blacklist.length - MAX_TAG_PREVIEW} 个，查看全部
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <span style={{ color: '#999' }}>暂无黑名单</span>
                 )}
@@ -985,20 +1019,29 @@ export default () => {
               </div>
               <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
                 {likelist.length > 0 ? (
-                  likelist.map((name: string, index: number) => (
-                    <Tag 
-                      key={`${name}-${index}`} 
-                      color="green" 
-                      closable
-                      onClose={() => {
-                        const newLikelist = likelist.filter((item: string) => item !== name);
-                        updateLikelist(newLikelist);
-                        message.success(`已从喜欢名单移除 "${input_姓氏}${name}"`);
-                      }}
-                    >
-                      {input_姓氏}{name}
-                    </Tag>
-                  ))
+                  <>
+                    {likelistPreview.map((name: string, index: number) => (
+                      <Tag 
+                        key={`${name}-${index}`} 
+                        color="green" 
+                        closable
+                        onClose={() => {
+                          const newLikelist = likelist.filter((item: string) => item !== name);
+                          updateLikelist(newLikelist);
+                          message.success(`已从喜欢名单移除 "${input_姓氏}${name}"`);
+                        }}
+                      >
+                        {input_姓氏}{name}
+                      </Tag>
+                    ))}
+                    {likelistHasMore && (
+                      <div style={{ marginTop: 8 }}>
+                        <Button type="link" size="small" onClick={() => setLikelistModalOpen(true)}>
+                          还有 {likelist.length - MAX_TAG_PREVIEW} 个，查看全部
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <span style={{ color: '#999' }}>暂无喜欢名单</span>
                 )}
@@ -1068,22 +1111,30 @@ export default () => {
               </div>
               <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
                 {charBlacklist.length > 0 ? (
-                  charBlacklist.map((char: string, index: number) => (
-                    <Tag 
-                      key={`${char}-${index}`} 
-                      color="orange" 
-                      closable
-                      onClose={() => {
-                        const newCharBlacklist = charBlacklist.filter((item: string) => item !== char);
-                        updateCharBlacklist(newCharBlacklist);
-                        message.success(`已从单字黑名单移除 "${char}"`);
-                        // 重新生成候选名
-                        document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
-                      }}
-                    >
-                      {char}
-                    </Tag>
-                  ))
+                  <>
+                    {charBlacklistPreview.map((char: string, index: number) => (
+                      <Tag 
+                        key={`${char}-${index}`} 
+                        color="orange" 
+                        closable
+                        onClose={() => {
+                          const newCharBlacklist = charBlacklist.filter((item: string) => item !== char);
+                          updateCharBlacklist(newCharBlacklist);
+                          message.success(`已从单字黑名单移除 "${char}"`);
+                          document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                        }}
+                      >
+                        {char}
+                      </Tag>
+                    ))}
+                    {charBlacklistHasMore && (
+                      <div style={{ marginTop: 8 }}>
+                        <Button type="link" size="small" onClick={() => setCharBlacklistModalOpen(true)}>
+                          还有 {charBlacklist.length - MAX_TAG_PREVIEW} 个，查看全部
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <span style={{ color: '#999' }}>暂无单字黑名单</span>
                 )}
@@ -1199,22 +1250,30 @@ export default () => {
             >
               <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
                 {viewedList.length > 0 ? (
-                  viewedList.map((name: string, index: number) => (
-                    <Tag 
-                      key={`${name}-${index}`} 
-                      color="blue" 
-                      closable
-                      onClose={() => {
-                        const newViewedList = viewedList.filter((item: string) => item !== name);
-                        updateViewedList(newViewedList);
-                        message.success(`已从已阅览名单移除 "${input_姓氏}${name}"`);
-                        // 重新生成候选名
-                        document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
-                      }}
-                    >
-                      {input_姓氏}{name}
-                    </Tag>
-                  ))
+                  <>
+                    {viewedPreview.map((name: string, index: number) => (
+                      <Tag 
+                        key={`${name}-${index}`} 
+                        color="blue" 
+                        closable
+                        onClose={() => {
+                          const newViewedList = viewedList.filter((item: string) => item !== name);
+                          updateViewedList(newViewedList);
+                          message.success(`已从已阅览名单移除 "${input_姓氏}${name}"`);
+                          document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                        }}
+                      >
+                        {input_姓氏}{name}
+                      </Tag>
+                    ))}
+                    {viewedHasMore && (
+                      <div style={{ marginTop: 8 }}>
+                        <Button type="link" size="small" onClick={() => setViewedListModalOpen(true)}>
+                          还有 {viewedList.length - MAX_TAG_PREVIEW} 个，查看全部
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <span style={{ color: '#999' }}>暂无已阅览名单</span>
                 )}
@@ -1380,6 +1439,124 @@ export default () => {
           <li>操作完成后将自动刷新页面</li>
         </ul>
         <p style={{ color: 'red' }}>此操作不可恢复，请谨慎操作！</p>
+      </Modal>
+      <Modal
+        title="黑名单（全部）"
+        open={isBlacklistModalOpen}
+        onCancel={() => setBlacklistModalOpen(false)}
+        footer={null}
+        width={600}
+      >
+        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+          {blacklist.length > 0 ? (
+            blacklist.map((name: string, index: number) => (
+              <Tag
+                key={`full-black-${name}-${index}`}
+                color="red"
+                closable
+                onClose={() => {
+                  const newBlacklist = blacklist.filter((item: string) => item !== name);
+                  updateBlacklist(newBlacklist);
+                  message.success(`已从黑名单移除 "${input_姓氏}${name}"`);
+                  document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                }}
+              >
+                {input_姓氏}
+                {name}
+              </Tag>
+            ))
+          ) : (
+            <span style={{ color: '#999' }}>暂无黑名单</span>
+          )}
+        </div>
+      </Modal>
+      <Modal
+        title="喜欢名单（全部）"
+        open={isLikelistModalOpen}
+        onCancel={() => setLikelistModalOpen(false)}
+        footer={null}
+        width={600}
+      >
+        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+          {likelist.length > 0 ? (
+            likelist.map((name: string, index: number) => (
+              <Tag
+                key={`full-like-${name}-${index}`}
+                color="green"
+                closable
+                onClose={() => {
+                  const newLikelist = likelist.filter((item: string) => item !== name);
+                  updateLikelist(newLikelist);
+                  message.success(`已从喜欢名单移除 "${input_姓氏}${name}"`);
+                }}
+              >
+                {input_姓氏}
+                {name}
+              </Tag>
+            ))
+          ) : (
+            <span style={{ color: '#999' }}>暂无喜欢名单</span>
+          )}
+        </div>
+      </Modal>
+      <Modal
+        title="单字黑名单（全部）"
+        open={isCharBlacklistModalOpen}
+        onCancel={() => setCharBlacklistModalOpen(false)}
+        footer={null}
+        width={600}
+      >
+        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+          {charBlacklist.length > 0 ? (
+            charBlacklist.map((char: string, index: number) => (
+              <Tag
+                key={`full-char-black-${char}-${index}`}
+                color="orange"
+                closable
+                onClose={() => {
+                  const newCharBlacklist = charBlacklist.filter((item: string) => item !== char);
+                  updateCharBlacklist(newCharBlacklist);
+                  message.success(`已从单字黑名单移除 "${char}"`);
+                  document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                }}
+              >
+                {char}
+              </Tag>
+            ))
+          ) : (
+            <span style={{ color: '#999' }}>暂无单字黑名单</span>
+          )}
+        </div>
+      </Modal>
+      <Modal
+        title="已阅览名单（全部）"
+        open={isViewedListModalOpen}
+        onCancel={() => setViewedListModalOpen(false)}
+        footer={null}
+        width={600}
+      >
+        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+          {viewedList.length > 0 ? (
+            viewedList.map((name: string, index: number) => (
+              <Tag
+                key={`full-viewed-${name}-${index}`}
+                color="blue"
+                closable
+                onClose={() => {
+                  const newViewedList = viewedList.filter((item: string) => item !== name);
+                  updateViewedList(newViewedList);
+                  message.success(`已从已阅览名单移除 "${input_姓氏}${name}"`);
+                  document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                }}
+              >
+                {input_姓氏}
+                {name}
+              </Tag>
+            ))
+          ) : (
+            <span style={{ color: '#999' }}>暂无已阅览名单</span>
+          )}
+        </div>
       </Modal>
       <p>
         姓氏:{input_姓氏}

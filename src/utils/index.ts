@@ -11,14 +11,24 @@ import NameDb_五道口_集思录 from "@/database/name_db/五道口_集思录_c
 import NameDb_五道口_精选集 from "@/database/name_db/五道口_精选集_国家科研基金项目负责人名.json";
 import NameDb_登科录 from "@/database/name_db/登科录_历史进士名.json";
 
+const __t_utils_module_start = performance.now();
+
 // 创建字符到拼音的映射表，优化查找性能
 const charToPinyinMap: Record<string, CommonType.Char_With_Pinyin[]> = {};
+const __t_map_start = performance.now();
+let __uniqueCharCount = 0;
 for (const item of AllPinyinList as CommonType.Char_With_Pinyin[]) {
   if (!charToPinyinMap[item.char]) {
     charToPinyinMap[item.char] = [];
+    __uniqueCharCount++;
   }
   charToPinyinMap[item.char].push(item);
 }
+console.log(
+  `[启动日志] utils 初始化: raw_pinyin_list=${(AllPinyinList as any[]).length}, uniqueChar=${__uniqueCharCount}, ` +
+    `构建 charToPinyinMap 耗时=${(performance.now() - __t_map_start).toFixed(1)}ms, ` +
+    `模块总耗时=${(performance.now() - __t_utils_module_start).toFixed(1)}ms`
+);
 
 export async function asyncSleep(ms: number) {
   return new Promise((reslove) => {
