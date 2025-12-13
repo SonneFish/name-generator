@@ -38,6 +38,9 @@ importers:
       opencc:
         specifier: ^1.1.8
         version: 1.1.8(encoding@0.1.13)
+      rc-virtual-list:
+        specifier: ^3.19.2
+        version: 3.19.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       react:
         specifier: ^19.2.0
         version: 19.2.0

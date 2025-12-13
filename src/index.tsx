@@ -25,6 +25,7 @@ import {
   Tag,
   Modal,
 } from "antd";
+import VirtualList from "rc-virtual-list";
 import Desc from "./desc";
 import Tip from "./component/tip";
 import * as utils from "@src/utils";
@@ -181,6 +182,9 @@ export default () => {
   const const_col_标题_span = 4;
   const const_col_输入框_span = 20;
   const MAX_TAG_PREVIEW = 50;
+  const VIRTUAL_LIST_HEIGHT = 400;
+  const VIRTUAL_ITEM_HEIGHT = 36;
+  const DEFAULT_VIRTUAL_TAGS_PER_ROW = 6;
 
   let flag姓氏最后一字是否为多音字 = char_姓_末尾字_PinyinList.length > 1;
   let flag已确认姓氏最后一字发音 = true;
@@ -601,6 +605,79 @@ export default () => {
   const charBlacklistHasMore = charBlacklist.length > MAX_TAG_PREVIEW;
   const viewedPreview = viewedList.slice(0, MAX_TAG_PREVIEW);
   const viewedHasMore = viewedList.length > MAX_TAG_PREVIEW;
+
+  const renderVirtualTagList = (params: {
+    items: string[];
+    color: string;
+    prefix?: string;
+    tagsPerRow?: number;
+    itemKeyPrefix: string;
+    onCloseItem: (name: string) => void;
+  }) => {
+    const {
+      items,
+      color,
+      prefix = "",
+      tagsPerRow = DEFAULT_VIRTUAL_TAGS_PER_ROW,
+      itemKeyPrefix,
+      onCloseItem,
+    } = params;
+    if (items.length === 0) {
+      return <span style={{ color: "#999" }}>暂无数据</span>;
+    }
+
+    // 将一维数组拆成每行多个 tag 的二维数组
+    const rows: string[][] = [];
+    for (let i = 0; i < items.length; i += tagsPerRow) {
+      rows.push(items.slice(i, i + tagsPerRow));
+    }
+
+    return (
+      <div style={{ border: "1px solid #f0f0f0", borderRadius: 6 }}>
+        <VirtualList
+          data={rows}
+          height={VIRTUAL_LIST_HEIGHT}
+          itemHeight={VIRTUAL_ITEM_HEIGHT}
+          itemKey={(row: string[]) => `${itemKeyPrefix}-row-${row.join("|")}`}
+        >
+          {(rowItems: string[], rowIndex: number) => (
+            <div
+              style={{
+                height: VIRTUAL_ITEM_HEIGHT,
+                display: "flex",
+                alignItems: "center",
+                padding: "0 8px",
+                gap: 8,
+              }}
+            >
+              {rowItems.map((name) => (
+                <Tag
+                  key={`${itemKeyPrefix}-${rowIndex}-${name}`}
+                  color={color}
+                  closable
+                  onClose={() => onCloseItem(name)}
+                  style={{ display: "inline-flex", alignItems: "center" }}
+                >
+                  <span
+                    style={{
+                      maxWidth: 150,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      display: "inline-block",
+                    }}
+                  >
+                    {prefix}
+                    {name}
+                  </span>
+                </Tag>
+              ))}
+            </div>
+          )}
+        </VirtualList>
+      </div>
+    );
+  };
 
   return (
     <div className="root-9969b06-block">
@@ -1447,28 +1524,19 @@ export default () => {
         footer={null}
         width={600}
       >
-        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-          {blacklist.length > 0 ? (
-            blacklist.map((name: string, index: number) => (
-              <Tag
-                key={`full-black-${name}-${index}`}
-                color="red"
-                closable
-                onClose={() => {
-                  const newBlacklist = blacklist.filter((item: string) => item !== name);
-                  updateBlacklist(newBlacklist);
-                  message.success(`已从黑名单移除 "${input_姓氏}${name}"`);
-                  document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
-                }}
-              >
-                {input_姓氏}
-                {name}
-              </Tag>
-            ))
-          ) : (
-            <span style={{ color: '#999' }}>暂无黑名单</span>
-          )}
-        </div>
+        {renderVirtualTagList({
+          items: blacklist,
+          color: "red",
+          prefix: input_姓氏,
+          tagsPerRow: 6,
+          itemKeyPrefix: "full-black",
+          onCloseItem: (name) => {
+            const newBlacklist = blacklist.filter((item: string) => item !== name);
+            updateBlacklist(newBlacklist);
+            message.success(`已从黑名单移除 \"${input_姓氏}${name}\"`);
+            document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+          },
+        })}
       </Modal>
       <Modal
         title="喜欢名单（全部）"
@@ -1477,27 +1545,18 @@ export default () => {
         footer={null}
         width={600}
       >
-        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-          {likelist.length > 0 ? (
-            likelist.map((name: string, index: number) => (
-              <Tag
-                key={`full-like-${name}-${index}`}
-                color="green"
-                closable
-                onClose={() => {
-                  const newLikelist = likelist.filter((item: string) => item !== name);
-                  updateLikelist(newLikelist);
-                  message.success(`已从喜欢名单移除 "${input_姓氏}${name}"`);
-                }}
-              >
-                {input_姓氏}
-                {name}
-              </Tag>
-            ))
-          ) : (
-            <span style={{ color: '#999' }}>暂无喜欢名单</span>
-          )}
-        </div>
+        {renderVirtualTagList({
+          items: likelist,
+          color: "green",
+          prefix: input_姓氏,
+          tagsPerRow: 6,
+          itemKeyPrefix: "full-like",
+          onCloseItem: (name) => {
+            const newLikelist = likelist.filter((item: string) => item !== name);
+            updateLikelist(newLikelist);
+            message.success(`已从喜欢名单移除 \"${input_姓氏}${name}\"`);
+          },
+        })}
       </Modal>
       <Modal
         title="单字黑名单（全部）"
@@ -1506,27 +1565,18 @@ export default () => {
         footer={null}
         width={600}
       >
-        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-          {charBlacklist.length > 0 ? (
-            charBlacklist.map((char: string, index: number) => (
-              <Tag
-                key={`full-char-black-${char}-${index}`}
-                color="orange"
-                closable
-                onClose={() => {
-                  const newCharBlacklist = charBlacklist.filter((item: string) => item !== char);
-                  updateCharBlacklist(newCharBlacklist);
-                  message.success(`已从单字黑名单移除 "${char}"`);
-                  document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
-                }}
-              >
-                {char}
-              </Tag>
-            ))
-          ) : (
-            <span style={{ color: '#999' }}>暂无单字黑名单</span>
-          )}
-        </div>
+        {renderVirtualTagList({
+          items: charBlacklist,
+          color: "orange",
+          tagsPerRow: 12,
+          itemKeyPrefix: "full-char-black",
+          onCloseItem: (char) => {
+            const newCharBlacklist = charBlacklist.filter((item: string) => item !== char);
+            updateCharBlacklist(newCharBlacklist);
+            message.success(`已从单字黑名单移除 \"${char}\"`);
+            document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+          },
+        })}
       </Modal>
       <Modal
         title="已阅览名单（全部）"
@@ -1535,28 +1585,19 @@ export default () => {
         footer={null}
         width={600}
       >
-        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-          {viewedList.length > 0 ? (
-            viewedList.map((name: string, index: number) => (
-              <Tag
-                key={`full-viewed-${name}-${index}`}
-                color="blue"
-                closable
-                onClose={() => {
-                  const newViewedList = viewedList.filter((item: string) => item !== name);
-                  updateViewedList(newViewedList);
-                  message.success(`已从已阅览名单移除 "${input_姓氏}${name}"`);
-                  document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
-                }}
-              >
-                {input_姓氏}
-                {name}
-              </Tag>
-            ))
-          ) : (
-            <span style={{ color: '#999' }}>暂无已阅览名单</span>
-          )}
-        </div>
+        {renderVirtualTagList({
+          items: viewedList,
+          color: "blue",
+          prefix: input_姓氏,
+          tagsPerRow: 6,
+          itemKeyPrefix: "full-viewed",
+          onCloseItem: (name) => {
+            const newViewedList = viewedList.filter((item: string) => item !== name);
+            updateViewedList(newViewedList);
+            message.success(`已从已阅览名单移除 \"${input_姓氏}${name}\"`);
+            document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+          },
+        })}
       </Modal>
       <p>
         姓氏:{input_姓氏}
