@@ -8,6 +8,7 @@ export default ({
   nameList = [],
   columnCount = 5,
   surnameLength = 1,
+  loading = false,
   onBlacklistChange,
   onLikelistChange,
   onCharBlacklistChange,
@@ -20,6 +21,7 @@ export default ({
   columnCount: number;
   // 姓氏长度
   surnameLength: number;
+  loading?: boolean;
   // 黑名单变化回调
   onBlacklistChange?: (blacklist: string[]) => void;
   // 喜欢名单变化回调
@@ -315,12 +317,14 @@ export default ({
     }
   };
 
-  let columns = [];
+  let columns: any[] = [];
+  const columnWidth = `${(100 / columnCount).toFixed(2)}%`;
   for (let i = 1; i <= columnCount; i++) {
     columns.push({
       title: `姓名-${i}`,
       dataIndex: `name-${i}`,
       key: `name-${i}`,
+      width: columnWidth,
       render: (text: string) => {
         if (!text) return null;
         
@@ -442,8 +446,11 @@ export default ({
         </div>
         <Table
           size="small"
+          loading={loading}
           dataSource={tableDataSource}
           columns={columns}
+          tableLayout="fixed"
+          locale={loading ? { emptyText: "" } : undefined}
           pagination={{
             defaultPageSize: 20,
             showSizeChanger: true,
