@@ -128,9 +128,17 @@ export function isCharLegal(char: string) {
 export function isCharPairLegal({
   charList = [],
   type,
+  checks,
 }: {
   charList: (Type.Char_With_Pinyin | Type.Pinyin_Of_Char)[];
   type: "last_2_char" | "first_2_char" | "full_name";
+  checks?: {
+    forbidSamePinyinWithoutTone?: boolean;
+    forbidSameTone?: boolean;
+    forbidSameInitialMethod?: boolean;
+    forbidSameInitialPlace?: boolean;
+    forbidSameVowelCategory?: boolean;
+  };
 }) {
   // 由于node和web中导入逻辑不一样, 导致isCharLegal检测结果不一. 所以这段逻辑无法启用
   // // 禁止出现多音字
@@ -158,24 +166,39 @@ export function isCharPairLegal({
 
   // 通用性检查
 
-  // 禁止同音
-  if (char1.pinyin_without_tone === char2.pinyin_without_tone) {
-    return false;
+  const cfg = {
+    forbidSamePinyinWithoutTone: true,
+    forbidSameTone: true,
+    forbidSameInitialMethod: true,
+    forbidSameInitialPlace: true,
+    forbidSameVowelCategory: true,
+    ...(checks || {}),
+  };
+
+  if (cfg.forbidSamePinyinWithoutTone) {
+    if (char1.pinyin_without_tone === char2.pinyin_without_tone) {
+      return false;
+    }
   }
-  // 禁止同声调
-  if (char1.tone === char2.tone) {
-    return false;
+  if (cfg.forbidSameTone) {
+    if (char1.tone === char2.tone) {
+      return false;
+    }
   }
-  // 禁止同声母分类(叠音)
-  if (char1.initial_声母类别_发音方法 === char2.initial_声母类别_发音方法) {
-    return false;
+  if (cfg.forbidSameInitialMethod) {
+    if (char1.initial_声母类别_发音方法 === char2.initial_声母类别_发音方法) {
+      return false;
+    }
   }
-  if (char1.initial_声母类别_发音部位 === char2.initial_声母类别_发音部位) {
-    return false;
+  if (cfg.forbidSameInitialPlace) {
+    if (char1.initial_声母类别_发音部位 === char2.initial_声母类别_发音部位) {
+      return false;
+    }
   }
-  // 禁止同韵母分类(叠韵)
-  if (char1.vowel_韵母类别 === char2.vowel_韵母类别) {
-    return false;
+  if (cfg.forbidSameVowelCategory) {
+    if (char1.vowel_韵母类别 === char2.vowel_韵母类别) {
+      return false;
+    }
   }
 
   // 检查开头两字
@@ -189,24 +212,30 @@ export function isCharPairLegal({
   if (type === "full_name") {
     // 额外检查2&3字的情况
 
-    // 禁止同音
-    if (char3.pinyin_without_tone === char2.pinyin_without_tone) {
-      return false;
+    if (cfg.forbidSamePinyinWithoutTone) {
+      if (char3.pinyin_without_tone === char2.pinyin_without_tone) {
+        return false;
+      }
     }
-    // 禁止同声调
-    if (char3.tone === char2.tone) {
-      return false;
+    if (cfg.forbidSameTone) {
+      if (char3.tone === char2.tone) {
+        return false;
+      }
     }
-    // 禁止同声母分类(叠音)
-    if (char3.initial_声母类别_发音方法 === char2.initial_声母类别_发音方法) {
-      return false;
+    if (cfg.forbidSameInitialMethod) {
+      if (char3.initial_声母类别_发音方法 === char2.initial_声母类别_发音方法) {
+        return false;
+      }
     }
-    if (char3.initial_声母类别_发音部位 === char2.initial_声母类别_发音部位) {
-      return false;
+    if (cfg.forbidSameInitialPlace) {
+      if (char3.initial_声母类别_发音部位 === char2.initial_声母类别_发音部位) {
+        return false;
+      }
     }
-    // 禁止同韵母分类(叠韵)
-    if (char3.vowel_韵母类别 === char2.vowel_韵母类别) {
-      return false;
+    if (cfg.forbidSameVowelCategory) {
+      if (char3.vowel_韵母类别 === char2.vowel_韵母类别) {
+        return false;
+      }
     }
 
     // 对音调的特殊逻辑进行检查

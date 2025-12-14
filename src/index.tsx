@@ -75,9 +75,35 @@ let default_必选字不能同音 = utils.getValueByStorage<boolean>(
   true
 );
 
+let default_音韵学检查开关 = utils.getValueByStorage<boolean>(
+  Const.Storage_Key_Map.音韵学检查开关,
+  true
+);
+
 let default_当前候选字库 = utils.getValueByStorage<Type.ChooseType>(
   Const.Storage_Key_Map.当前候选字库,
   Const.Choose_Type_Option.古人云
+);
+
+let default_音韵_禁止同音 = utils.getValueByStorage<boolean>(
+  Const.Storage_Key_Map.音韵_禁止同音,
+  true
+);
+let default_音韵_禁止同声调 = utils.getValueByStorage<boolean>(
+  Const.Storage_Key_Map.音韵_禁止同声调,
+  true
+);
+let default_音韵_禁止同声母_方法 = utils.getValueByStorage<boolean>(
+  Const.Storage_Key_Map.音韵_禁止同声母_方法,
+  true
+);
+let default_音韵_禁止同声母_部位 = utils.getValueByStorage<boolean>(
+  Const.Storage_Key_Map.音韵_禁止同声母_部位,
+  true
+);
+let default_音韵_禁止同韵母 = utils.getValueByStorage<boolean>(
+  Const.Storage_Key_Map.音韵_禁止同韵母,
+  true
 );
 
 const store = proxy<{
@@ -92,6 +118,14 @@ const store = proxy<{
     genderType: Type.GenderType;
     enableRandomNameList: boolean;
     enableFilterSamePinyinMustHaveChars: boolean;
+    enablePhonologyCheck: boolean;
+    phonologyChecks: {
+      forbidSamePinyinWithoutTone: boolean;
+      forbidSameTone: boolean;
+      forbidSameInitialMethod: boolean;
+      forbidSameInitialPlace: boolean;
+      forbidSameVowelCategory: boolean;
+    };
     generateConfig: {
       charSpecifyPos: Type.CharSpecifyPos;
       姓氏末字_拼音_choose: CommonType.Char_With_Pinyin;
@@ -121,6 +155,14 @@ const store = proxy<{
     genderType: default_gender_type,
     enableRandomNameList: default_是否乱序展示候选名,
     enableFilterSamePinyinMustHaveChars: default_必选字不能同音,
+    enablePhonologyCheck: default_音韵学检查开关,
+    phonologyChecks: {
+      forbidSamePinyinWithoutTone: default_音韵_禁止同音,
+      forbidSameTone: default_音韵_禁止同声调,
+      forbidSameInitialMethod: default_音韵_禁止同声母_方法,
+      forbidSameInitialPlace: default_音韵_禁止同声母_部位,
+      forbidSameVowelCategory: default_音韵_禁止同韵母,
+    },
     generateConfig: {
       charSpecifyPos: default_input_必选字位置,
       姓氏末字_拼音_choose: default_姓氏末字_拼音_choose,
@@ -183,6 +225,9 @@ export default () => {
   const [isViewedListModalOpen, setViewedListModalOpen] = useState(false);
   const [isCustomNameModalOpen, setCustomNameModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [docModalOpen, setDocModalOpen] = useState(false);
+  const [docTitle, setDocTitle] = useState<string>("");
+  const [docContent, setDocContent] = useState<string>("");
 
   const MODAL_VLIST_HEIGHT = 400;
   const MODAL_VLIST_ITEM_HEIGHT = 40;
@@ -477,6 +522,8 @@ export default () => {
       charDbLevel: snapshot.status.currentCharDbLevel,
       genderType: snapshot.status.genderType,
       enableRandomNameList: snapshot.status.enableRandomNameList,
+      enablePhonologyCheck: snapshot.status.enablePhonologyCheck,
+      phonologyChecks: snapshot.status.phonologyChecks,
       currentTab: snapshot.status.currentTab,
       
       // 黑名单、喜欢名单和已阅览名单（导出时忽略姓氏）
@@ -556,6 +603,33 @@ export default () => {
             store.status.enableRandomNameList = config.enableRandomNameList;
             utils.setValueByStorage(Const.Storage_Key_Map.是否乱序展示候选名, config.enableRandomNameList);
           }
+          if (config.enablePhonologyCheck !== undefined) {
+            store.status.enablePhonologyCheck = config.enablePhonologyCheck;
+            utils.setValueByStorage(Const.Storage_Key_Map.音韵学检查开关, config.enablePhonologyCheck);
+          }
+          if (config.phonologyChecks !== undefined) {
+            const c = config.phonologyChecks || {};
+            if (typeof c.forbidSamePinyinWithoutTone === 'boolean') {
+              store.status.phonologyChecks.forbidSamePinyinWithoutTone = c.forbidSamePinyinWithoutTone;
+              utils.setValueByStorage(Const.Storage_Key_Map.音韵_禁止同音, c.forbidSamePinyinWithoutTone);
+            }
+            if (typeof c.forbidSameTone === 'boolean') {
+              store.status.phonologyChecks.forbidSameTone = c.forbidSameTone;
+              utils.setValueByStorage(Const.Storage_Key_Map.音韵_禁止同声调, c.forbidSameTone);
+            }
+            if (typeof c.forbidSameInitialMethod === 'boolean') {
+              store.status.phonologyChecks.forbidSameInitialMethod = c.forbidSameInitialMethod;
+              utils.setValueByStorage(Const.Storage_Key_Map.音韵_禁止同声母_方法, c.forbidSameInitialMethod);
+            }
+            if (typeof c.forbidSameInitialPlace === 'boolean') {
+              store.status.phonologyChecks.forbidSameInitialPlace = c.forbidSameInitialPlace;
+              utils.setValueByStorage(Const.Storage_Key_Map.音韵_禁止同声母_部位, c.forbidSameInitialPlace);
+            }
+            if (typeof c.forbidSameVowelCategory === 'boolean') {
+              store.status.phonologyChecks.forbidSameVowelCategory = c.forbidSameVowelCategory;
+              utils.setValueByStorage(Const.Storage_Key_Map.音韵_禁止同韵母, c.forbidSameVowelCategory);
+            }
+          }
           
           if (config.currentTab !== undefined) {
             store.status.currentTab = config.currentTab;
@@ -622,6 +696,12 @@ export default () => {
     localStorage.removeItem(Const.Storage_Key_Map.是否乱序展示候选名);
     localStorage.removeItem(Const.Storage_Key_Map.当前候选字库);
     localStorage.removeItem(Const.Storage_Key_Map.Char_Level);
+    localStorage.removeItem(Const.Storage_Key_Map.音韵学检查开关);
+    localStorage.removeItem(Const.Storage_Key_Map.音韵_禁止同音);
+    localStorage.removeItem(Const.Storage_Key_Map.音韵_禁止同声调);
+    localStorage.removeItem(Const.Storage_Key_Map.音韵_禁止同声母_方法);
+    localStorage.removeItem(Const.Storage_Key_Map.音韵_禁止同声母_部位);
+    localStorage.removeItem(Const.Storage_Key_Map.音韵_禁止同韵母);
     
     // 重置状态
     setBlacklist([]);
@@ -640,6 +720,14 @@ export default () => {
     store.status.enableRandomNameList = true;
     store.status.generateConfig.charSpecifyPos = Const.Char_Specify_Option.不限制;
     store.status.generateConfig.姓氏末字_拼音_choose = {} as CommonType.Char_With_Pinyin;
+    store.status.enablePhonologyCheck = true;
+    store.status.phonologyChecks = {
+      forbidSamePinyinWithoutTone: true,
+      forbidSameTone: true,
+      forbidSameInitialMethod: true,
+      forbidSameInitialPlace: true,
+      forbidSameVowelCategory: true,
+    };
     
     // 关闭弹窗并刷新页面
     setIsResetModalOpen(false);
@@ -664,6 +752,18 @@ export default () => {
       store.previewNameList = [];
       setTotalNameList([]);
     },
+  };
+
+  const openDoc = async (path: string, title: string) => {
+    try {
+      const res = await fetch(path);
+      const text = await res.text();
+      setDocTitle(title);
+      setDocContent(text);
+      setDocModalOpen(true);
+    } catch (e) {
+      message.error("文档加载失败");
+    }
   };
 
   let isIn诗云Tab =
@@ -845,6 +945,7 @@ export default () => {
             />
             <Button 
               size="small" 
+              danger
               style={{ marginLeft: '8px' }}
               onClick={() => {
                 utils.setValueByStorage(
@@ -977,11 +1078,21 @@ export default () => {
             />
             <Button 
               size="small" 
+              danger
               style={{ marginLeft: '8px' }}
               onClick={() => {
-                utils.setValueByStorage(Const.Storage_Key_Map.必选字, '');
-                set_input_必选字('');
-                message.success('指定用字列表已清空');
+                Modal.confirm({
+                  title: '确认清空指定用字？',
+                  content: '清空后不可恢复',
+                  okText: '确认清空',
+                  okType: 'danger',
+                  cancelText: '取消',
+                  onOk: () => {
+                    utils.setValueByStorage(Const.Storage_Key_Map.必选字, '');
+                    set_input_必选字('');
+                    message.success('指定用字列表已清空');
+                  },
+                });
               }}
             >
               清空
@@ -1006,6 +1117,179 @@ export default () => {
           </div>
         </Col>
       </Row>
+      <Divider
+        style={{
+          margin: "12px 0px",
+        }}
+      ></Divider>
+      <Row align="middle">
+        <Col span={const_col_标题_span}>
+          <span>音韵学检查</span>
+          {(() => {
+            const tipContent = (
+              <div>
+                <ul style={{ paddingLeft: 16, margin: 0 }}>
+                  <li>
+                    禁止与指定汉字同音
+                    <ul style={{ paddingLeft: 16, margin: 0 }}>
+                      <li>避免与长辈/亲属名字中的字符同音</li>
+                    </ul>
+                  </li>
+                  <li>
+                    禁止叠双声声
+                    <ul style={{ paddingLeft: 16, margin: 0 }}>
+                      <li>
+                        连续两字声母所属分类相同, 例如 <code>d/t/n/l</code> 同属舌尖中音, 一次性念出 <code>电梯内到他那里动态能力的童年</code> 会非常困难
+                      </li>
+                    </ul>
+                  </li>
+                  <li>
+                    禁止叠韵
+                    <ul style={{ paddingLeft: 16, margin: 0 }}>
+                      <li>
+                        连续两字韵母所属分类相同, 例如 <code>喇嘛拿喇叭拉哑巴换挞嘛</code> —— 该规则一般用于编写绕口令
+                      </li>
+                    </ul>
+                  </li>
+                  <li>
+                    音调平仄
+                    <ul style={{ paddingLeft: 16, margin: 0 }}>
+                      <li>
+                        三字名的音调平仄一共有 64 种不同情况, 从音韵美感评级上可分为 1~5 分, 诗云中仅提供评分为 3 分以上的组合
+                      </li>
+                      <li>支持按男宝女宝选名</li>
+                      <li>男宝结尾名一般选二声(阳平)或四声(去声), 比较响亮, 干脆利落</li>
+                      <li>女宝结尾名一般选一声(阴平), 比较温和</li>
+                      <li>三声(上声)结尾, 男宝女宝均可用</li>
+                    </ul>
+                  </li>
+                  <li>
+                    避免多音字
+                    <ul style={{ paddingLeft: 16, margin: 0 }}>
+                      <li>姓名中需要绕开多音字, 以避免被喊错名字</li>
+                      <li>
+                        诗云中对 100 万+姓名进行解析, 除了姓名中明确作为单音字使用的 <code>多音字</code> 外(如 <code>华/中/大/正/和</code>), 其他多音字均已从候选字库排除。具体规则见
+                        <a href="#" onClick={(e) => { e.preventDefault(); openDoc('/doc/多音字取音标准.md', '多音字取音标准'); }}>多音字取音标准</a>
+                      </li>
+                      <li>若姓氏本身是多音字(如 任), 需要指定发音后方可继续使用</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+            );
+            return <Tip title={tipContent as any} />;
+          })()}
+        </Col>
+        <Col span={const_col_输入框_span}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+            <span>总开关:</span>
+            <Switch
+              checked={snapshot.status.enablePhonologyCheck}
+              onChange={(checked) => {
+                store.status.enablePhonologyCheck = checked;
+                utils.setValueByStorage(Const.Storage_Key_Map.音韵学检查开关, checked);
+                Tools.reset();
+              }}
+            />
+            <Tip title="开启后按音韵规则过滤：相邻两字不允许同音（忽略声调）、不允许同声调、声母类别（发音方法/发音部位）不能相同、韵母类别不能相同；在全名模式下还对第2、3字执行同样检查；当第二位指定候选字时，仅检查后两字搭配。关闭后将跳过音韵检查，生成更多候选，速度更快"></Tip>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginTop: '8px', alignItems: 'center' }}>
+            <div>
+              <span style={{ marginRight: '8px' }}>禁止同音(忽略声调):</span>
+              <Switch
+                checked={snapshot.status.phonologyChecks.forbidSamePinyinWithoutTone}
+                onChange={(checked) => {
+                  store.status.phonologyChecks.forbidSamePinyinWithoutTone = checked;
+                  utils.setValueByStorage(Const.Storage_Key_Map.音韵_禁止同音, checked);
+                  Tools.reset();
+                }}
+                disabled={!snapshot.status.enablePhonologyCheck}
+              />
+              <Tip title="相邻两字拼音去声调后相同将过滤。例：清青（qing, qing）、安胺（an, an）"></Tip>
+            </div>
+            <div>
+              <span style={{ marginRight: '8px' }}>禁止同声调:</span>
+              <Switch
+                checked={snapshot.status.phonologyChecks.forbidSameTone}
+                onChange={(checked) => {
+                  store.status.phonologyChecks.forbidSameTone = checked;
+                  utils.setValueByStorage(Const.Storage_Key_Map.音韵_禁止同声调, checked);
+                  Tools.reset();
+                }}
+                disabled={!snapshot.status.enablePhonologyCheck}
+              />
+              <Tip title="相邻两字声调相同将过滤。例：明灵（míng、líng，均二声）、安康（ān、kāng，均一声）"></Tip>
+            </div>
+            <div>
+              <span style={{ marginRight: '8px' }}>禁止同声母(发音方法):</span>
+              <Switch
+                checked={snapshot.status.phonologyChecks.forbidSameInitialMethod}
+                onChange={(checked) => {
+                  store.status.phonologyChecks.forbidSameInitialMethod = checked;
+                  utils.setValueByStorage(Const.Storage_Key_Map.音韵_禁止同声母_方法, checked);
+                  Tools.reset();
+                }}
+                disabled={!snapshot.status.enablePhonologyCheck}
+              />
+              <Tip title="相邻两字声母发音方法相同将过滤（如都为塞音/擦音）。例：博德（b、d，均为塞音）"></Tip>
+            </div>
+            <div>
+              <span style={{ marginRight: '8px' }}>禁止同声母(发音部位):</span>
+              <Switch
+                checked={snapshot.status.phonologyChecks.forbidSameInitialPlace}
+                onChange={(checked) => {
+                  store.status.phonologyChecks.forbidSameInitialPlace = checked;
+                  utils.setValueByStorage(Const.Storage_Key_Map.音韵_禁止同声母_部位, checked);
+                  Tools.reset();
+                }}
+                disabled={!snapshot.status.enablePhonologyCheck}
+              />
+              <Tip title="相邻两字声母发音部位相同将过滤（如都为唇音/舌尖音）。例：博朋（b、p，均为唇音）"></Tip>
+            </div>
+            <div>
+              <span style={{ marginRight: '8px' }}>禁止同韵母:</span>
+              <Switch
+                checked={snapshot.status.phonologyChecks.forbidSameVowelCategory}
+                onChange={(checked) => {
+                  store.status.phonologyChecks.forbidSameVowelCategory = checked;
+                  utils.setValueByStorage(Const.Storage_Key_Map.音韵_禁止同韵母, checked);
+                  Tools.reset();
+                }}
+                disabled={!snapshot.status.enablePhonologyCheck}
+              />
+              <Tip title="相邻两字韵母类别相同将过滤。例：张当（zhāng、dāng，韵母均为 ang）"></Tip>
+            </div>
+          </div>
+          <div>
+            <span>按音韵过滤姓名:&nbsp;</span>
+        <Radio.Group
+          className="compact-radio"
+          defaultValue={snapshot.status.genderType}
+          onChange={(event) => {
+            store.status.genderType = event.target.value;
+            utils.setValueByStorage(
+              Const.Storage_Key_Map.Gender_Type,
+              store.status.genderType
+            );
+            Tools.reset();
+          }}
+        >
+              <Radio.Button value={Const.Gender_Type.偏男宝}>
+                {Const.Gender_Type.偏男宝}
+                <Tip title="男宝的姓名一般以二/四声结尾, 简洁有力, 三声亦可" />
+              </Radio.Button>
+              <Radio.Button value={Const.Gender_Type.偏女宝}>
+                {Const.Gender_Type.偏女宝}
+                <Tip title="女宝的姓名一般以一声结尾, 温文尔雅, 三声亦可" />
+              </Radio.Button>
+              <Radio.Button value={Const.Gender_Type.都看看}>
+                {Const.Gender_Type.都看看}
+              </Radio.Button>
+            </Radio.Group>
+          </div>
+        </Col>
+      </Row>
+      
       <Divider
         style={{
           margin: "12px 0px",
@@ -1069,11 +1353,20 @@ export default () => {
               extra={
                 <Button 
                   size="small" 
+                  danger
                   onClick={() => {
-                    updateBlacklist([]);
-                    message.success('黑名单已清空');
-                    // 重新生成候选名
-                    document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                    Modal.confirm({
+                      title: '确认清空黑名单？',
+                      content: '清空后不可恢复',
+                      okText: '确认清空',
+                      okType: 'danger',
+                      cancelText: '取消',
+                      onOk: () => {
+                        updateBlacklist([]);
+                        message.success('黑名单已清空');
+                        document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                      },
+                    });
                   }}
                 >
                   清空
@@ -1157,9 +1450,19 @@ export default () => {
               extra={
                 <Button 
                   size="small" 
+                  danger
                   onClick={() => {
-                    updateLikelist([]);
-                    message.success('喜欢名单已清空');
+                    Modal.confirm({
+                      title: '确认清空喜欢名单？',
+                      content: '清空后不可恢复',
+                      okText: '确认清空',
+                      okType: 'danger',
+                      cancelText: '取消',
+                      onOk: () => {
+                        updateLikelist([]);
+                        message.success('喜欢名单已清空');
+                      },
+                    });
                   }}
                 >
                   清空
@@ -1241,11 +1544,20 @@ export default () => {
               extra={
                 <Button 
                   size="small" 
+                  danger
                   onClick={() => {
-                    updateCharBlacklist([]);
-                    message.success('单字黑名单已清空');
-                    // 重新生成候选名
-                    document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                    Modal.confirm({
+                      title: '确认清空单字黑名单？',
+                      content: '清空后不可恢复',
+                      okText: '确认清空',
+                      okType: 'danger',
+                      cancelText: '取消',
+                      onOk: () => {
+                        updateCharBlacklist([]);
+                        message.success('单字黑名单已清空');
+                        document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                      },
+                    });
                   }}
                 >
                   清空
@@ -1333,12 +1645,21 @@ export default () => {
               size="small"
               extra={
                 <Button 
-                  size="small" 
+                  size="small"
+                  danger
                   onClick={() => {
-                    updateCharLikelist([]);
-                    message.success('单字喜欢名单已清空');
-                    // 重新生成候选名
-                    document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                    Modal.confirm({
+                      title: '确认清空单字喜欢名单？',
+                      content: '清空后不可恢复',
+                      okText: '确认清空',
+                      okType: 'danger',
+                      cancelText: '取消',
+                      onOk: () => {
+                        updateCharLikelist([]);
+                        message.success('单字喜欢名单已清空');
+                        document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                      },
+                    });
                   }}
                 >
                   清空
@@ -1418,11 +1739,20 @@ export default () => {
               extra={
                 <Button 
                   size="small" 
+                  danger
                   onClick={() => {
-                    updateViewedList([]);
-                    message.success('已阅览名单已清空');
-                    // 重新生成候选名
-                    document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                    Modal.confirm({
+                      title: '确认清空已阅览名单？',
+                      content: '清空后不可恢复',
+                      okText: '确认清空',
+                      okType: 'danger',
+                      cancelText: '取消',
+                      onOk: () => {
+                        updateViewedList([]);
+                        message.success('已阅览名单已清空');
+                        document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                      },
+                    });
                   }}
                 >
                   清空
@@ -1479,13 +1809,22 @@ export default () => {
                   <Button
                     size="small"
                     danger
-                    onClick={() => {
-                      updateCustomNameList([]);
-                      message.success('自定义名字库已清空');
-                    }}
-                  >
-                    清空
-                  </Button>
+                  onClick={() => {
+                    Modal.confirm({
+                      title: '确认清空自定义名字库？',
+                      content: '清空后不可恢复',
+                      okText: '确认清空',
+                      okType: 'danger',
+                      cancelText: '取消',
+                      onOk: () => {
+                        updateCustomNameList([]);
+                        message.success('自定义名字库已清空');
+                      },
+                    });
+                  }}
+                >
+                  清空
+                </Button>
                 </Space>
               }
             >
@@ -1582,32 +1921,7 @@ export default () => {
       </Row>
       <p></p>
       {ele诗云字库}
-      <div>
-        <span>按音韵过滤姓名:&nbsp;</span>
-        <Radio.Group
-          defaultValue={snapshot.status.genderType}
-          onChange={(event) => {
-            store.status.genderType = event.target.value;
-            utils.setValueByStorage(
-              Const.Storage_Key_Map.Gender_Type,
-              store.status.genderType
-            );
-            Tools.reset();
-          }}
-        >
-          <Radio.Button value={Const.Gender_Type.偏男宝}>
-            {Const.Gender_Type.偏男宝}
-            <Tip title="男宝的姓名一般以二/四声结尾, 简洁有力, 三声亦可" />
-          </Radio.Button>
-          <Radio.Button value={Const.Gender_Type.偏女宝}>
-            {Const.Gender_Type.偏女宝}
-            <Tip title="女宝的姓名一般以一声结尾, 温文尔雅, 三声亦可" />
-          </Radio.Button>
-          <Radio.Button value={Const.Gender_Type.都看看}>
-            {Const.Gender_Type.都看看}
-          </Radio.Button>
-        </Radio.Group>
-      </div>
+      
       <p></p>
       <div>
         <Button
@@ -1708,6 +2022,15 @@ export default () => {
           <li>操作完成后将自动刷新页面</li>
         </ul>
         <p style={{ color: 'red' }}>此操作不可恢复，请谨慎操作！</p>
+      </Modal>
+      <Modal
+        title={docTitle || "文档预览"}
+        open={docModalOpen}
+        onCancel={() => setDocModalOpen(false)}
+        footer={null}
+        width={800}
+      >
+        <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>{docContent}</pre>
       </Modal>
       <Modal
         title="黑名单（全部）"
@@ -1812,9 +2135,18 @@ export default () => {
               size="small"
               danger
               onClick={() => {
-                updateCustomNameList([]);
-                message.success("自定义名字库已清空");
-                document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                Modal.confirm({
+                  title: '确认清空自定义名字库？',
+                  content: '清空后不可恢复',
+                  okText: '确认清空',
+                  okType: 'danger',
+                  cancelText: '取消',
+                  onOk: () => {
+                    updateCustomNameList([]);
+                    message.success("自定义名字库已清空");
+                    document.querySelector('button[type="primary"]')?.dispatchEvent(new Event('click'));
+                  },
+                });
               }}
             >
               清空
@@ -1869,6 +2201,8 @@ export default () => {
               pinyinOptionList: pinyinOptionList,
               generateAll: true,
               enableFilterSamePinyinMustHaveChars: snapshot.status.enableFilterSamePinyinMustHaveChars,
+              enablePhonologyCheck: snapshot.status.enablePhonologyCheck,
+              phonologyChecks: snapshot.status.phonologyChecks,
             });
             const generateEnd = Date.now();
             console.log(`候选人名生成耗时: ${generateEnd - generateStart}ms`);
@@ -1896,6 +2230,7 @@ export default () => {
             }
             const genderFilterEnd = Date.now();
             console.log(`按性别要求过滤耗时: ${genderFilterEnd - genderFilterStart}ms`);
+            console.log(`按性别要求过滤后剩余: ${totalNameList.length}`);
 
             // 获取黑名单和喜欢名单
             const blacklistGetStart = Date.now();
@@ -1917,29 +2252,29 @@ export default () => {
             
             totalNameList = totalNameList.filter(name => {
               // 提取名字部分（去掉姓氏）
-              const namePart = name.demoStr.substring(surnameLength);
-              
-              // 检查是否在黑名单中
-              if (blacklistSet.has(namePart)) {
-                return false;
-              }
+              const namePart = name.demoStr.slice(surnameLength, surnameLength + 2);
               
               // 检查是否在已阅览名单中
               if (viewedListSet.has(namePart)) {
                 return false;
               }
               
-              // 检查是否包含单字黑名单中的字符
-              for (const char of charBlacklistSet) {
-                if (typeof namePart === 'string' && typeof char === 'string' && namePart.includes(char)) {
-                  return false;
-                }
+              // 检查是否在黑名单中
+              if (blacklistSet.has(namePart)) {
+                return false;
+              }
+              
+              const c1 = namePart[0];
+              const c2 = namePart[1];
+              if (charBlacklistSet.has(c1) || charBlacklistSet.has(c2)) {
+                return false;
               }
               
               return true;
             });
             const blacklistFilterEnd = Date.now();
             console.log(`过滤黑名单和已阅览名单中的名字耗时: ${blacklistFilterEnd - blacklistFilterStart}ms`);
+            console.log(`黑名单/已阅览/单字黑名单过滤后剩余: ${totalNameList.length}`);
 
             setTotalNameList(totalNameList);
             // 随机打乱
