@@ -9,6 +9,7 @@
     "serve": "vite preview",
     "dev:5174": "npm run start:5174",
     "build": "vite build",
+    "preview": "vite preview",
     "analyzer": "vite-bundle-visualizer && serve ./node_modules/.pnpm/vite-bundle-visualizer@0.6.0/node_modules/vite-bundle-visualizer",
     "g": "pnpm run generate-name-db",
     "summary": "ts-node script/process_namedb/summary.ts",
