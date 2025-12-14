@@ -31,6 +31,12 @@ export const Storage_Key_Map = {
   已阅览名单: `${Base_Storage_Key}_已阅览名单`,
   必选字不能同音: `${Base_Storage_Key}_必选字不能同音`,
   自定义名字库: `${Base_Storage_Key}_自定义名字库`,
+  音韵学检查开关: `${Base_Storage_Key}_enablePhonologyCheck`,
+  音韵_禁止同音: `${Base_Storage_Key}_phonology_forbidSamePinyinWithoutTone`,
+  音韵_禁止同声调: `${Base_Storage_Key}_phonology_forbidSameTone`,
+  音韵_禁止同声母_方法: `${Base_Storage_Key}_phonology_forbidSameInitialMethod`,
+  音韵_禁止同声母_部位: `${Base_Storage_Key}_phonology_forbidSameInitialPlace`,
+  音韵_禁止同韵母: `${Base_Storage_Key}_phonology_forbidSameVowelCategory`,
 };
 
 export const Char_Specify_Option = {
@@ -221,4 +227,4 @@ export const CharDb_Level_Show: Record<Type.CharDbLevel, string> = {
 /**
  * 最大展示姓名数
  */
-export const Max_Display_Item = 1000;
+export const Max_Display_Item = 200;
