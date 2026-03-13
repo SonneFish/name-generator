@@ -464,6 +464,17 @@ export default () => {
                 givenName = rest.slice(-2);
               }
             } else if (onlyChinese.length === 2) {
+              // if (
+              //   surnameStr &&
+              //   onlyChinese.startsWith(surnameStr) &&
+              //   onlyChinese.length === surnameStr.length + 1
+              // ) {
+                // 两字姓名（姓+单字名）行，忽略
+              skipped++;
+              continue;
+              // }
+              // console.log('surnameStr:', surnameStr);
+              // console.log('two char name:', onlyChinese);
               givenName = onlyChinese;
             } else if (onlyChinese.length === 3) {
               givenName = onlyChinese.slice(1);
